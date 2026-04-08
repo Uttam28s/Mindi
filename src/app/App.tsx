@@ -269,9 +269,17 @@ export default function App() {
         next.set(d.seatIndex, (prev.get(d.seatIndex) ?? []).filter(c => c.id !== d.cardId));
         return next;
       });
+      // Update myHand state if the local player played the card
+      if (d.seatIndex === mySeatIndex) {
+        setMyHand(prev => prev.filter(c => c.id !== d.cardId));
+      }
       setGameState(prev => {
         if (!prev) return prev;
-        const myHandNow = prev.players[mySeatIndex]?.hand ?? myHand;
+        const currentMyHand = prev.players[mySeatIndex]?.hand ?? myHand;
+        // Remove the played card from my hand if I was the one who played it
+        const myHandNow = d.seatIndex === mySeatIndex
+          ? currentMyHand.filter(c => c.id !== d.cardId)
+          : currentMyHand;
         return {
           ...d.gameState,
           players: d.gameState.players.map((p: Player, i: number) => {
