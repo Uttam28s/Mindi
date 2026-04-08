@@ -1,0 +1,20 @@
+{
+  "name": "Mindi — The Classic Indian Card Game",
+  "short_name": "Mindi",
+  "description": "Play Mindi (Mendikot) online — the classic Indian card game. Challenge friends in real-time multiplayer or compete against AI. Capture the 10s to win!",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#120404",
+  "theme_color": "#d4a843",
+  "orientation": "portrait-primary",
+  "categories": ["games", "entertainment"],
+  "lang": "en",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
