@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { GameState, TrickEntry, Suit } from '../types';
+import { GameState, TrickEntry, Suit, Card as CardType } from '../types';
 import { Card } from './Card';
 import { TrickArea } from './TrickArea';
 import { TableBackground3D } from './TableBackground3D';
-import { Bot, Trophy, Target, Zap, ChevronUp, ChevronDown, Crown, Layers, Hash } from 'lucide-react';
+import { Trophy, Target, Zap, ChevronUp, ChevronDown, Crown, Layers, Hash } from 'lucide-react';
 import { Sounds } from '../utils/sounds';
 
 const AVATARS = ['🦁', '🦅', '🐘', '🦚', '🐅', '🐍', '🦎', '🐎', '🐒', '🦜'];
@@ -110,22 +110,15 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
     ? getPlayableCardIds(myPlayer.hand, round.currentTrick.ledSuit)
     : new Set<string>();
 
-  // ── Hand: interleaved red/black for visual contrast ────────────────
+  // ── Hand: suits grouped, alternating color order ♥ ♠ ♦ ♣ ──────────
+  // hearts(red) → spades(black) → diamonds(red) → clubs(black)
   const sortedHand = useMemo(() => {
     const rv = (r: string) => ({ '3': 1, '2': 2, '7': 3, '8': 4, '9': 5, '10': 6, 'J': 7, 'Q': 8, 'K': 9, 'A': 10 } as Record<string, number>)[r] ?? 0;
-    const reds = [...myPlayer.hand]
-      .filter(c => c.suit === 'hearts' || c.suit === 'diamonds')
-      .sort((a, b) => a.suit !== b.suit ? (a.suit === 'hearts' ? -1 : 1) : rv(b.rank) - rv(a.rank));
-    const blacks = [...myPlayer.hand]
-      .filter(c => c.suit === 'clubs' || c.suit === 'spades')
-      .sort((a, b) => a.suit !== b.suit ? (a.suit === 'clubs' ? -1 : 1) : rv(b.rank) - rv(a.rank));
-    const result: typeof myPlayer.hand = [];
-    const maxLen = Math.max(reds.length, blacks.length);
-    for (let i = 0; i < maxLen; i++) {
-      if (i < reds.length) result.push(reds[i]);
-      if (i < blacks.length) result.push(blacks[i]);
-    }
-    return result;
+    const suitOrder: Record<string, number> = { hearts: 0, spades: 1, diamonds: 2, clubs: 3 };
+    return [...myPlayer.hand].sort((a, b) => {
+      if (suitOrder[a.suit] !== suitOrder[b.suit]) return suitOrder[a.suit] - suitOrder[b.suit];
+      return rv(b.rank) - rv(a.rank);
+    });
   }, [myPlayer.hand]);
 
   const maxW = Math.min(winSize.w - 24, 700);
@@ -405,7 +398,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
 
         <div className="w-full overflow-x-auto scrollbar-hide px-2">
           <div className="mx-auto relative" style={{ width: totalHandWidth, height: handHeight }}>
-            {sortedHand.map((card, index) => {
+            {sortedHand.map((card: CardType, index: number) => {
               const centerOffset = index - (handCount - 1) / 2;
               const rotation = handCount > 1 ? (centerOffset / ((handCount - 1) / 2)) * maxRot : 0;
               const yOffset = Math.abs(centerOffset) * (handCount > 6 ? 1.5 : 2.5);
