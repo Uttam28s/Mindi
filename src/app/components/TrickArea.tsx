@@ -79,20 +79,28 @@ export function TrickArea({ currentTrick, playerCount, currentTurnIndex, playerN
             transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`, zIndex: 5,
           }}>
             <div className="flex flex-col items-center gap-0.5">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base transition-all duration-300 ${isCurrent ? 'scale-110' : ''}`}
-                style={(() => {
-                  const team = playerTeams?.[i];
-                  const tc = team !== undefined ? TEAM_COLORS[team] : null;
-                  return {
-                    background: isCurrent ? 'rgba(212,168,67,0.15)' : tc ? tc.bg : 'rgba(255,255,255,0.03)',
-                    border: `1.5px solid ${isCurrent ? 'rgba(212,168,67,0.5)' : tc ? tc.border : 'rgba(255,255,255,0.06)'}`,
-                    boxShadow: isCurrent ? '0 0 10px rgba(212,168,67,0.15)' : tc ? `0 0 6px ${tc.glow}` : 'none',
-                  };
-                })()}>
-                {AVATARS[i]}
+              <div className="relative">
+                {/* Expanding outer ring */}
+                {isCurrent && (
+                  <div className="absolute animate-turn-outer pointer-events-none"
+                    style={{ inset: -4 }} />
+                )}
+                {/* Avatar circle */}
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center text-base transition-all duration-300 ${isCurrent ? 'animate-turn-ring' : ''}`}
+                  style={(() => {
+                    const team = playerTeams?.[i];
+                    const tc = team !== undefined ? TEAM_COLORS[team] : null;
+                    return {
+                      background: isCurrent ? 'rgba(212,168,67,0.2)' : tc ? tc.bg : 'rgba(255,255,255,0.03)',
+                      border: `2px solid ${isCurrent ? 'rgba(212,168,67,0.8)' : tc ? tc.border : 'rgba(255,255,255,0.06)'}`,
+                    };
+                  })()}>
+                  {AVATARS[i]}
+                </div>
               </div>
               <span className="text-[8px] font-bold" style={{
                 color: isCurrent ? '#d4a843' : hasPlayed ? 'rgba(34,197,94,0.6)' : 'rgba(255,255,255,0.2)',
+                textShadow: isCurrent ? '0 0 6px rgba(212,168,67,0.5)' : 'none',
               }}>
                 {playerNames?.[i]?.slice(0, 5) || `P${i + 1}`}
               </span>

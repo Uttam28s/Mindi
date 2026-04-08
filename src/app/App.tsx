@@ -295,6 +295,15 @@ export default function App() {
         };
       });
       if (d.trickComplete) {
+        const lastTrick = d.gameState.round.completedTricks.at(-1);
+        if (lastTrick) {
+          setTrickPause({
+            cards: lastTrick.cards,
+            winnerSeatIndex: lastTrick.winnerSeatIndex,
+            winnerName: d.gameState.players[lastTrick.winnerSeatIndex]?.name ?? '',
+            mindisWon: lastTrick.mindisInTrick
+          });
+        }
         trickPauseRef.current = setTimeout(() => { trickPauseRef.current = null; setTrickPause(null); }, 2000);
       }
     };
