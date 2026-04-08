@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: mindi-server
+    runtime: node
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: CLIENT_ORIGIN
+        sync: false   # You will set this manually in Render dashboard after Vercel deploy
