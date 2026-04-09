@@ -372,6 +372,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
             playerNames={gameState.players.map(p => p.name)}
             playerTeams={gameState.players.map(p => p.teamId)}
             size={tableSize}
+            localSeatIndex={myPlayerIndex}
           />
         )}
       </div>

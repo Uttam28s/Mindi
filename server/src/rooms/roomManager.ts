@@ -11,6 +11,7 @@ export interface Room {
   gameState: GameState | null;
   phase: 'lobby' | 'playing' | 'round_end' | 'game_over';
   createdAt: number;
+  teamIds?: TeamId[];  // shuffled once at game start, preserved across rounds
 }
 
 export interface RoomSeat {
@@ -144,12 +145,31 @@ export function getLobbyPlayers(room: Room): LobbyPlayer[] {
     }));
 }
 
+/** Shuffle team assignments: balanced [0,1,0,1,...] randomly permuted. */
+function shuffleTeams(playerCount: number): TeamId[] {
+  const half = playerCount / 2;
+  const teams: TeamId[] = [...Array(half).fill(0 as TeamId), ...Array(half).fill(1 as TeamId)];
+  // Fisher-Yates shuffle
+  for (let i = teams.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [teams[i], teams[j]] = [teams[j], teams[i]];
+  }
+  return teams;
+}
+
 /** Start the game. Fails if not all seats filled or already started. */
 export function startGame(room: Room): GameState | { error: string } {
   if (room.phase !== 'lobby') return { error: 'Already started' };
   if (room.seats.some(s => s === null)) return { error: 'Not all players joined' };
 
+  // Shuffle team assignments once at game start
+  const teamIds = shuffleTeams(room.playerCount);
+  room.teamIds = teamIds;
+
+  // Update seat records so getLobbyPlayers reflects the shuffled teams
   const seats = room.seats as RoomSeat[];
+  seats.forEach((seat, i) => { seat.teamId = teamIds[i]; });
+
   const state = initGame(
     room.code,
     seats.map(s => s.name),
@@ -158,7 +178,10 @@ export function startGame(room: Room): GameState | { error: string } {
       playerCount: room.playerCount,
       trumpMethod: room.trumpMethod,
       gamePointsTarget: room.gamePointsTarget
-    }
+    },
+    0,
+    [0, 0],
+    teamIds
   );
   room.gameState = state;
   room.phase = 'playing';
@@ -189,7 +212,8 @@ export function startNextRound(
       gamePointsTarget: room.gamePointsTarget
     },
     newDealer,
-    [...prev.gamePoints] as [number, number]
+    [...prev.gamePoints] as [number, number],
+    room.teamIds
   );
   room.gameState = newState;
   room.phase = 'playing';

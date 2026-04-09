@@ -31,7 +31,8 @@ export function initGame(
   socketIds: string[],
   config: Pick<GameConfig, 'playerCount'|'trumpMethod'|'gamePointsTarget'>,
   dealerSeat = 0,
-  preservedGamePoints: [number, number] = [0, 0]
+  preservedGamePoints: [number, number] = [0, 0],
+  teamIds?: TeamId[]
 ): GameState {
   const pc = config.playerCount;
   const { hands, fillerCards } = buildAndDeal(pc);
@@ -47,7 +48,7 @@ export function initGame(
     id: socketIds[i] ?? `bot_${i}`,
     name,
     seatIndex: i,
-    teamId: (i % 2) as TeamId,
+    teamId: teamIds ? teamIds[i] : (i % 2) as TeamId,
     hand: hands[i],
     cardCount: hands[i].length
   }));

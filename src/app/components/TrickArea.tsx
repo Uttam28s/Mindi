@@ -15,9 +15,10 @@ interface TrickAreaProps {
   playerNames?: string[];
   playerTeams?: number[];
   size?: number;
+  localSeatIndex?: number;
 }
 
-export function TrickArea({ currentTrick, playerCount, currentTurnIndex, playerNames, playerTeams, size = 400 }: TrickAreaProps) {
+export function TrickArea({ currentTrick, playerCount, currentTurnIndex, playerNames, playerTeams, size = 400, localSeatIndex = 0 }: TrickAreaProps) {
   const r = size / 380; // scale ratio relative to original 380 design
   const radius      = Math.round(88  * r); // card placement radius
   const ringSize    = Math.round(280 * r); // outer decorative ring
@@ -31,7 +32,9 @@ export function TrickArea({ currentTrick, playerCount, currentTurnIndex, playerN
   const nameFontPx  = Math.max(11, Math.round(13 * r));  // player name font size
 
   const getPos = (seat: number, dist: number) => {
-    const angle = (360 / playerCount) * seat - 90;
+    // Rotate the table so the local player always appears at the bottom
+    const relativeSeat = (seat - localSeatIndex + playerCount) % playerCount;
+    const angle = -(360 / playerCount) * relativeSeat + 90;
     const rad = (angle * Math.PI) / 180;
     return { x: Math.cos(rad) * dist, y: Math.sin(rad) * dist };
   };
