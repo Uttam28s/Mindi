@@ -25,6 +25,17 @@ const io = new Server(httpServer, {
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok', rooms: 0 }));
 
+// Self-ping to prevent Render free tier from spinning down
+if (process.env.SERVER_URL) {
+  setInterval(() => {
+    http.get(`${process.env.SERVER_URL}/health`, (res) => {
+      res.resume(); // discard response body
+    }).on('error', (err) => {
+      console.warn('[keepalive] ping failed:', err.message);
+    });
+  }, 10 * 60 * 1000); // every 10 minutes
+}
+
 // Socket.io
 io.on('connection', socket => {
   console.log(`[socket] connected: ${socket.id}`);
