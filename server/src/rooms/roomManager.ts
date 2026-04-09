@@ -220,6 +220,23 @@ export function startNextRound(
   return newState;
 }
 
+/** Rename a player in the lobby. Only allowed before game starts. */
+export function renamePlayer(
+  socketId: string,
+  code: string,
+  newName: string
+): { room: Room; seatIndex: number } | { error: string } {
+  const room = rooms.get(code.toUpperCase());
+  if (!room) return { error: 'Room not found' };
+  if (room.phase !== 'lobby') return { error: 'Game already started' };
+  const idx = room.seats.findIndex(s => s?.socketId === socketId);
+  if (idx === -1) return { error: 'Not in room' };
+  const trimmed = newName.trim().slice(0, 20);
+  if (!trimmed) return { error: 'Name cannot be empty' };
+  room.seats[idx]!.name = trimmed;
+  return { room, seatIndex: idx };
+}
+
 /** Expire rooms older than 30 minutes with no active game (PRD §14.3). */
 export function cleanupStaleRooms(): void {
   const cutoff = Date.now() - 30 * 60 * 1000;

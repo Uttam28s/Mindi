@@ -1,7 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import {
   createRoom, joinRoom, leaveRoom, getRoom, getRoomBySocket,
-  getLobbyPlayers, startGame, startNextRound, Room, AiSlotConfig
+  getLobbyPlayers, startGame, startNextRound, renamePlayer, Room, AiSlotConfig
 } from '../rooms/roomManager';
 import { playCard as enginePlayCard, applyBandHukum, revealBandHukum } from '../engine/gameEngine';
 import { GameState, Player, Card } from '../types';
@@ -61,6 +61,16 @@ export function registerHandlers(io: Server, socket: Socket): void {
       teamId: seat.teamId,
       players: getLobbyPlayers(room)
     });
+  });
+
+  // ── Rename Player (lobby only) ─────────────────────────────────
+  socket.on('rename_player', ({ roomCode, newName }) => {
+    const result = renamePlayer(socket.id, roomCode, newName);
+    if ('error' in result) {
+      socket.emit('error', { code: 'RENAME_FAILED', message: result.error });
+      return;
+    }
+    io.to(roomCode).emit('player_renamed', { players: getLobbyPlayers(result.room) });
   });
 
   // ── Start Game (host only) ──────────────────────────────────────

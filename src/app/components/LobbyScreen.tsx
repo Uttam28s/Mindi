@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, Crown, Play, ArrowLeft, Bot, User } from 'lucide-react';
+import { Copy, Check, Crown, Play, ArrowLeft, Pencil, X } from 'lucide-react';
 import { Sounds } from '../utils/sounds';
 
 const AVATARS = ['🦁', '🦅', '🐘', '🦚', '🐅', '🐍', '🦎', '🐎', '🐒', '🦜'];
@@ -10,10 +10,26 @@ interface LobbyScreenProps {
   mySeatIndex: number;
   gameSettings: { playerCount: number; trumpMethod: string; gamePointsTarget: number };
   onStartGame: () => void; onBack: () => void;
+  onRenamePlayer?: (newName: string) => void;
 }
 
-export function LobbyScreen({ roomCode, players, maxPlayers, isHost, mySeatIndex, gameSettings, onStartGame, onBack }: LobbyScreenProps) {
+export function LobbyScreen({ roomCode, players, maxPlayers, isHost, mySeatIndex, gameSettings, onStartGame, onBack, onRenamePlayer }: LobbyScreenProps) {
   const [copied, setCopied] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+
+  const startEditName = () => {
+    const me = players.find(p => p.seatIndex === mySeatIndex);
+    setNameInput(me?.name ?? '');
+    setEditingName(true);
+  };
+
+  const saveEditName = () => {
+    const trimmed = nameInput.trim();
+    if (trimmed && onRenamePlayer) onRenamePlayer(trimmed);
+    setEditingName(false);
+  };
+
   const handleCopy = () => {
     try { navigator.clipboard?.writeText(roomCode); } catch {
       try { const t = document.createElement('textarea'); t.value = roomCode; t.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); } catch {}
@@ -54,21 +70,54 @@ export function LobbyScreen({ roomCode, players, maxPlayers, isHost, mySeatIndex
                   <span className="text-[10px] tracking-wider" style={{ color: `rgba(${color},0.7)` }}>{label.toUpperCase()}</span>
                 </div>
                 <div className="space-y-1.5">
-                  {team.map((p) => (
-                    <div key={p.seatIndex} className="flex items-center gap-2.5 px-3 py-2 rounded-lg" style={{ background: `rgba(${color},0.04)`, border: `1px solid rgba(${color},0.1)` }}>
+                  {team.map((p) => {
+                    const isMe = p.seatIndex === mySeatIndex;
+                    const isEditing = isMe && editingName;
+                    return (
+                    <div key={p.seatIndex} className="flex items-center gap-2.5 px-3 py-2 rounded-lg" style={{ background: `rgba(${color},0.04)`, border: `1px solid rgba(${color},${isMe ? '0.22' : '0.1'})` }}>
                       <span className="text-lg">{AVATARS[p.seatIndex]}</span>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm text-white truncate">{p.name}</span>
-                          {p.seatIndex === mySeatIndex && (
-                            <span className="text-[8px] px-1 rounded" style={{ background: 'rgba(212,168,67,0.12)', color: '#d4a843', border: '1px solid rgba(212,168,67,0.25)', flexShrink: 0 }}>You</span>
-                          )}
-                        </div>
+                        {isEditing ? (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              autoFocus
+                              type="text"
+                              value={nameInput}
+                              onChange={e => setNameInput(e.target.value.slice(0, 20))}
+                              onKeyDown={e => { if (e.key === 'Enter') saveEditName(); if (e.key === 'Escape') setEditingName(false); }}
+                              className="flex-1 px-2 py-0.5 rounded text-xs text-white focus:outline-none min-w-0"
+                              style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(212,168,67,0.35)' }}
+                            />
+                            <button onClick={saveEditName}
+                              className="text-[10px] px-2 py-0.5 rounded font-bold"
+                              style={{ background: 'rgba(212,168,67,0.15)', color: '#d4a843', border: '1px solid rgba(212,168,67,0.3)', flexShrink: 0 }}>
+                              Save
+                            </button>
+                            <button onClick={() => setEditingName(false)} style={{ flexShrink: 0 }}>
+                              <X className="w-3 h-3" style={{ color: 'rgba(255,255,255,0.3)' }} />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm text-white truncate">{p.name}</span>
+                            {isMe && (
+                              <>
+                                <span className="text-[8px] px-1 rounded" style={{ background: 'rgba(212,168,67,0.12)', color: '#d4a843', border: '1px solid rgba(212,168,67,0.25)', flexShrink: 0 }}>You</span>
+                                {onRenamePlayer && (
+                                  <button onClick={startEditName} className="ml-0.5 flex-shrink-0">
+                                    <Pencil className="w-3 h-3" style={{ color: 'rgba(212,168,67,0.5)' }} />
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )}
                         {p.isAI && <div className="text-[8px]" style={{ color: 'rgba(212,168,67,0.4)' }}>AI · {p.aiDifficulty}</div>}
                       </div>
-                      {p.isHost && <Crown className="w-3 h-3" style={{ color: '#d4a843' }} />}
+                      {p.isHost && !isEditing && <Crown className="w-3 h-3" style={{ color: '#d4a843' }} />}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             ))}

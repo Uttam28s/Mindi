@@ -9,13 +9,14 @@ interface JoinGameScreenProps {
 
 export function JoinGameScreen({ onBack, onJoin }: JoinGameScreenProps) {
   const [roomCode, setRoomCode] = useState('');
-  const [playerName, setPlayerName] = useState('');
+  const [playerName, setPlayerName] = useState(() => localStorage.getItem('mindi_player_name') || '');
   const [error, setError] = useState('');
 
   const handleJoin = () => {
     if (!playerName.trim()) { setError('Enter your name'); return; }
     if (roomCode.length !== 6) { setError('Enter a valid 6-char code'); return; }
     Sounds.click();
+    localStorage.setItem('mindi_player_name', playerName.trim());
     onJoin(roomCode.toUpperCase(), playerName.trim());
   };
 

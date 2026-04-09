@@ -92,6 +92,16 @@ function getDeckCount(playerCount: number): 2 | 3 | 4 | 5 {
   return 5;
 }
 
+function shuffleLocalTeams(playerCount: number): (0 | 1)[] {
+  const half = playerCount / 2;
+  const teams: (0 | 1)[] = [...Array(half).fill(0 as 0 | 1), ...Array(half).fill(1 as 0 | 1)];
+  for (let i = teams.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [teams[i], teams[j]] = [teams[j], teams[i]];
+  }
+  return teams;
+}
+
 function getTotalMindis(playerCount: number): 8 | 12 | 16 | 20 {
   if (playerCount === 4) return 8;
   if (playerCount === 6) return 12;
@@ -117,7 +127,8 @@ function buildGameState(
   setup: GameSetup,
   roomCode: string,
   dealerSeat = 0,
-  preservedGamePoints: [number, number] = [0, 0]
+  preservedGamePoints: [number, number] = [0, 0],
+  teamIds?: (0 | 1)[]
 ): GameState {
   const pc = setup.playerCount as 4 | 6 | 8 | 10;
   const dc = getDeckCount(pc);
@@ -132,11 +143,12 @@ function buildGameState(
     ? SUITS[Math.floor(Math.random() * 4)]
     : null;
 
+  const assignedTeamIds = teamIds ?? shuffleLocalTeams(pc);
   const players: Player[] = setup.playerNames.map((name, i) => ({
     id: `player_${i}`,
     name,
     seatIndex: i,
-    teamId: (i % 2) as 0 | 1,
+    teamId: assignedTeamIds[i],
     hand: hands[i],
     cardCount: hands[i].length
   }));
@@ -215,6 +227,7 @@ export default function App() {
 
   const aiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trickPauseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localTeamIdsRef = useRef<(0 | 1)[] | null>(null);
 
   // ─── Socket event payload types ──────────────────────────────
   type OnlineLobbyPlayer = { name: string; seatIndex: number; teamId: 0|1; connected: boolean; isAI?: boolean; aiDifficulty?: string };
@@ -232,8 +245,9 @@ export default function App() {
     const onRoomJoined = (d: { roomCode: string; seatIndex: number; players: OnlineLobbyPlayer[]; settings: OnlineSettings }) => {
       setRoomCode(d.roomCode); setMySeatIndex(d.seatIndex); setLobbyPlayers(d.players); setOnlineSettings(d.settings); setIsHost(false); setScreen('lobby');
     };
-    const onPlayerJoined = (d: { players: OnlineLobbyPlayer[] }) => setLobbyPlayers(d.players);
-    const onPlayerLeft   = (d: { players: OnlineLobbyPlayer[] }) => setLobbyPlayers(d.players);
+    const onPlayerJoined  = (d: { players: OnlineLobbyPlayer[] }) => setLobbyPlayers(d.players);
+    const onPlayerLeft    = (d: { players: OnlineLobbyPlayer[] }) => setLobbyPlayers(d.players);
+    const onPlayerRenamed = (d: { players: OnlineLobbyPlayer[] }) => setLobbyPlayers(d.players);
 
     const onGameStarted = (d: { gameState: GameState; myHand: Card[]; mySeatIndex: number; aiHands?: Record<number, Card[]> }) => {
       // Host initialises AI player instances for any AI seats
@@ -347,6 +361,7 @@ export default function App() {
     socket.on('room_joined',        onRoomJoined);
     socket.on('player_joined',      onPlayerJoined);
     socket.on('player_left',        onPlayerLeft);
+    socket.on('player_renamed',     onPlayerRenamed);
     socket.on('game_started',       onGameStarted);
     socket.on('card_played',        onCardPlayed);
     socket.on('round_complete',     onRoundComplete);
@@ -361,6 +376,7 @@ export default function App() {
       socket.off('room_joined');
       socket.off('player_joined');
       socket.off('player_left');
+      socket.off('player_renamed');
       socket.off('game_started');
       socket.off('card_played');
       socket.off('round_complete');
@@ -638,14 +654,38 @@ export default function App() {
     setPlayerConfigs(setup.players);
     initAI(setup);
 
+    // Shuffle teams once; preserve across rounds
+    const teamIds = shuffleLocalTeams(setup.playerCount);
+    localTeamIdsRef.current = teamIds;
+
     setScreen('loading');
     setTimeout(() => {
-      setGameState(buildGameState(setup, code));
+      setGameState(buildGameState(setup, code, 0, [0, 0], teamIds));
       setScreen('game');
     }, 1500);
   };
 
   // ─── Screen handlers ────────────────────────────────────────
+
+  const PLAYER_NAME_KEY = 'mindi_player_name';
+
+  const handleRenamePlayer = (newName: string) => {
+    const trimmed = newName.trim().slice(0, 20);
+    if (!trimmed) return;
+    localStorage.setItem(PLAYER_NAME_KEY, trimmed);
+    if (isOnlineMode) {
+      getSocket().emit('rename_player', { roomCode, newName: trimmed });
+      return;
+    }
+    // Local mode: update configs so the lobby reflects the new name
+    setPlayerConfigs(prev => prev.map((p, i) => i === 0 ? { ...p, name: trimmed } : p));
+    setCurrentSetup(prev => prev ? {
+      ...prev,
+      playerNames: prev.playerNames.map((n, i) => i === 0 ? trimmed : n),
+      players: prev.players.map((p, i) => i === 0 ? { ...p, name: trimmed } : p),
+    } : prev);
+    setLobbyPlayers(prev => prev.map(p => p.seatIndex === 0 ? { ...p, name: trimmed } : p));
+  };
 
   const handleBack = () => {
     if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
@@ -662,13 +702,14 @@ export default function App() {
   };
 
   const handleQuickPlay = () => {
+    const savedName = localStorage.getItem('mindi_player_name') || 'You';
     const quickSetup: GameSetup = {
       playerCount: 4,
       trumpMethod: 'cut_hukum',
       gamePointsTarget: 5,
-      playerNames: ['You', 'Arjun', 'Priya', 'Vikram'],
+      playerNames: [savedName, 'Arjun', 'Priya', 'Vikram'],
       players: [
-        { name: 'You', isAI: false },
+        { name: savedName, isAI: false },
         { name: 'Arjun', isAI: true, aiDifficulty: 'medium' },
         { name: 'Priya', isAI: true, aiDifficulty: 'medium' },
         { name: 'Vikram', isAI: true, aiDifficulty: 'medium' },
@@ -763,7 +804,8 @@ export default function App() {
       currentSetup,
       roomCode,
       newDealer,
-      [...gameState.gamePoints] as [number, number]
+      [...gameState.gamePoints] as [number, number],
+      localTeamIdsRef.current ?? undefined
     );
     setGameState(newState);
     setRoundWinner(null);
@@ -850,6 +892,7 @@ export default function App() {
           }
           onStartGame={handleStartGameFromLobby}
           onBack={handleBack}
+          onRenamePlayer={handleRenamePlayer}
         />
       )}
 
@@ -864,6 +907,7 @@ export default function App() {
           onCardClick={handleCardClick}
           aiPlayers={isOnlineMode ? new Set<number>() : new Set(aiPlayersMap.keys())}
           trickPause={trickPause}
+          onExitGame={handleBack}
         />
       )}
 

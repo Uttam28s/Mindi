@@ -3,7 +3,7 @@ import { GameState, TrickEntry, Suit, Card as CardType } from '../types';
 import { Card } from './Card';
 import { TrickArea } from './TrickArea';
 import { TableBackground3D } from './TableBackground3D';
-import { Trophy, Target, Zap, ChevronUp, ChevronDown, Crown, Layers, Hash } from 'lucide-react';
+import { Trophy, Target, Zap, ChevronUp, ChevronDown, Crown, Layers, Hash, Menu, X, Home, RotateCcw } from 'lucide-react';
 import { Sounds } from '../utils/sounds';
 
 const AVATARS = ['🦁', '🦅', '🐘', '🦚', '🐅', '🐍', '🦎', '🐎', '🐒', '🦜'];
@@ -21,6 +21,7 @@ interface GameTableProps {
   onCardClick?: (cardId: string) => void;
   aiPlayers?: Set<number>;
   trickPause?: TrickPauseData | null;
+  onExitGame?: () => void;
 }
 
 const suitSymbols: Record<string, string> = { hearts: '♥', diamonds: '♦', spades: '♠', clubs: '♣' };
@@ -37,12 +38,13 @@ function getPlayableCardIds(hand: { id: string; suit: Suit }[], ledSuit: Suit | 
   return new Set((same.length > 0 ? same : hand).map(c => c.id));
 }
 
-export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, trickPause }: GameTableProps) {
+export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, trickPause, onExitGame }: GameTableProps) {
   const myPlayer = gameState.players[myPlayerIndex];
   const { round, config } = gameState;
   const isMyTurn = round.currentTurnSeatIndex === myPlayerIndex && !trickPause;
 
   const [scoreExpanded, setScoreExpanded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [dealing, setDealing] = useState(true);
   const prevTrickRef = useRef(round.trickNumber);
   const prevTurnRef  = useRef(round.currentTurnSeatIndex);
@@ -201,6 +203,13 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
             {scoreExpanded
               ? <ChevronUp  style={{ width: fs(16), height: fs(16), color: 'rgba(212,168,67,0.5)' }} />
               : <ChevronDown style={{ width: fs(16), height: fs(16), color: 'rgba(212,168,67,0.5)' }} />}
+          </button>
+
+          {/* Menu button */}
+          <button onClick={() => { setMenuOpen(true); setScoreExpanded(false); }}
+            className="flex items-center justify-center rounded-full transition-colors"
+            style={{ width: 38, height: 38, background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.18)' }}>
+            <Menu style={{ width: fs(18), height: fs(18), color: 'rgba(212,168,67,0.8)' }} />
           </button>
         </div>
 
@@ -452,6 +461,66 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
           </div>
         </div>
       </div>
+      {/* ══ PAUSE MENU OVERLAY ══════════════════════════════════ */}
+      {menuOpen && (
+        <div className="fixed inset-0 z-[9998] flex items-center justify-center"
+          style={{ background: 'rgba(8,2,2,0.88)', backdropFilter: 'blur(16px)' }}
+          onClick={() => setMenuOpen(false)}>
+          <div className="flex flex-col items-center gap-4 w-72 animate-fade-in"
+            onClick={e => e.stopPropagation()}
+            style={{ background: 'rgba(20,6,6,0.95)', border: '1px solid rgba(212,168,67,0.2)', borderRadius: 20, padding: '32px 24px' }}>
+
+            {/* Header */}
+            <div className="flex items-center justify-between w-full mb-2">
+              <div className="flex items-center gap-2">
+                <span style={{ fontSize: 22, color: '#d4a843' }}>♠</span>
+                <span className="font-cinzel tracking-widest" style={{ fontSize: 16, color: '#d4a843' }}>MENU</span>
+              </div>
+              <button onClick={() => setMenuOpen(false)}
+                className="flex items-center justify-center rounded-full transition-colors"
+                style={{ width: 32, height: 32, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+                <X style={{ width: 16, height: 16, color: 'rgba(255,255,255,0.5)' }} />
+              </button>
+            </div>
+
+            {/* Score summary */}
+            <div className="w-full rounded-xl px-4 py-3 flex items-center justify-center gap-4"
+              style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(212,168,67,0.1)' }}>
+              <div className="text-center">
+                <div style={{ fontSize: 11, color: 'rgba(111,163,212,0.65)', letterSpacing: '0.1em' }}>TEAM A</div>
+                <div className="font-bold" style={{ fontSize: 28, color: '#6fa3d4', lineHeight: 1.1 }}>{gameState.gamePoints[0]}</div>
+              </div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.2)' }}>vs</div>
+              <div className="text-center">
+                <div style={{ fontSize: 11, color: 'rgba(212,112,112,0.65)', letterSpacing: '0.1em' }}>TEAM B</div>
+                <div className="font-bold" style={{ fontSize: 28, color: '#d47070', lineHeight: 1.1 }}>{gameState.gamePoints[1]}</div>
+              </div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.18)', marginLeft: 8 }}>
+                / {gameState.config.gamePointsTarget}
+              </div>
+            </div>
+
+            {/* Resume */}
+            <button onClick={() => setMenuOpen(false)}
+              className="w-full flex items-center justify-center gap-3 rounded-xl font-cinzel tracking-wider transition-all"
+              style={{ padding: '14px 0', background: 'rgba(212,168,67,0.12)', border: '1px solid rgba(212,168,67,0.35)', color: '#d4a843', fontSize: 14 }}>
+              <RotateCcw style={{ width: 18, height: 18 }} />
+              Resume Game
+            </button>
+
+            {/* Divider */}
+            <div className="w-full" style={{ height: 1, background: 'rgba(255,255,255,0.06)' }} />
+
+            {/* Exit to Home */}
+            <button onClick={() => { setMenuOpen(false); onExitGame?.(); }}
+              className="w-full flex items-center justify-center gap-3 rounded-xl font-cinzel tracking-wider transition-all"
+              style={{ padding: '14px 0', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.25)', color: 'rgba(248,113,113,0.8)', fontSize: 14 }}>
+              <Home style={{ width: 18, height: 18 }} />
+              Exit to Home
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
