@@ -53,7 +53,6 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
 
   // ── Font scale: 4p baseline ────────────────────────────────────────
   const uiScale = ({ 4: 1.0, 6: 0.88, 8: 0.78, 10: 0.70 } as Record<number, number>)[config.playerCount] ?? 1.0;
-  const fs = (px: number): string => `${Math.round(px * uiScale)}px`;
 
   // ── Window / orientation tracking ─────────────────────────────────
   const [winSize, setWinSize] = useState({ w: window.innerWidth, h: window.innerHeight });
@@ -66,15 +65,21 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
   const isLandscape = winSize.w > winSize.h;
   const isMobilePortrait = winSize.h > winSize.w && winSize.w < 900;
 
+  // Portrait-aware font scale (0.82× in portrait to reduce header clutter)
+  const pScale = isMobilePortrait ? 0.82 : 1.0;
+  const fs = (px: number): string => `${Math.round(px * uiScale * pScale)}px`;
+
   // ── Card size ──────────────────────────────────────────────────────
-  const cardSz: 'sm' | 'md' = isLandscape && winSize.h < 500 ? 'sm' : 'md';
+  const cardSz: 'sm' | 'md' = (isLandscape && winSize.h < 500) || isMobilePortrait ? 'sm' : 'md';
   const cardH = cardSz === 'sm' ? 90 : 118;
   const cardW = cardSz === 'sm' ? 64 : 84;
 
   // ── Hand geometry ──────────────────────────────────────────────────
-  const handPadX = 12;
-  const maxW = Math.min(winSize.w - 24, 760);
-  const overlap = handCount > 1 ? Math.max(28, Math.min(40, (maxW - cardW - handPadX * 2) / (handCount - 1))) : 0;
+  const handPadX = isMobilePortrait ? 6 : 12;
+  const maxW = Math.min(winSize.w - (isMobilePortrait ? 8 : 24), 760);
+  const overlap = handCount > 1
+    ? Math.max(isMobilePortrait ? 18 : 28, Math.min(isMobilePortrait ? 32 : 40, (maxW - cardW - handPadX * 2) / (handCount - 1)))
+    : 0;
 
   const handHeight = cardH + 28; // flat layout — no rotation overshoot needed
 
@@ -93,6 +98,28 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
   }, [winSize]);
 
   const totalTricks = 15;
+
+  // ── Portrait table dimensions ──────────────────────────────────────
+  const pBS = 46;                               // badge space — fits vertical pill (~36px) + 10px margin
+  const pTW = winSize.w - pBS * 2 - 8;          // container = W-8, always within screen
+  const pTH = Math.round(pTW * 0.58);           // table height
+  // Card offset from table center for each relative seat index
+  const pCardPos = (relIdx: number): { x: number; y: number } => {
+    const count = config.playerCount;
+    if (count === 4) {
+      const p: Record<number, { x: number; y: number }> = {
+        0: { x: 0,          y: pTH * 0.22  },   // bottom (local)
+        1: { x: pTW * 0.26, y: 0           },   // right
+        2: { x: 0,          y: -pTH * 0.22 },   // top
+        3: { x: -pTW * 0.26, y: 0          },   // left
+      };
+      return p[relIdx] ?? { x: 0, y: 0 };
+    }
+    const angle = -(360 / count) * relIdx + 90;
+    const rad = angle * Math.PI / 180;
+    const r = Math.min(pTW, pTH) * 0.25;
+    return { x: Math.cos(rad) * r, y: -Math.sin(rad) * r };
+  };
 
   // ── Sounds ────────────────────────────────────────────────────────
   useEffect(() => { setDealing(true); const t = setTimeout(() => setDealing(false), 800); return () => clearTimeout(t); }, []);
@@ -138,23 +165,13 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
     if (playableIds.has(cardId)) onCardClick?.(cardId);
   };
 
-  const barPy = isLandscape ? 6 : 11;
+  const barPy = isLandscape ? 6 : isMobilePortrait ? 6 : 11;
 
   return (
     <div className="h-screen w-screen relative flex flex-col"
       style={{ background: 'linear-gradient(180deg,#120404 0%,#1e0808 40%,#2a0f0f 100%)', overflow: 'hidden' }}>
       <TableBackground3D />
 
-      {/* ── Portrait overlay ────────────────────────────────────────── */}
-      {isMobilePortrait && (
-        <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center gap-5"
-          style={{ background: 'rgba(8,2,2,0.97)', backdropFilter: 'blur(12px)' }}>
-          <div className="text-6xl animate-bounce-subtle">📱</div>
-          <div className="text-5xl font-bold" style={{ color: '#d4a843', transform: 'rotate(90deg)', display: 'inline-block' }}>↻</div>
-          <p className="font-cinzel text-xl tracking-widest text-center" style={{ color: '#d4a843' }}>ROTATE YOUR DEVICE</p>
-          <p className="text-sm text-center px-10" style={{ color: 'rgba(255,255,255,0.35)' }}>Mindi is designed for landscape mode</p>
-        </div>
-      )}
 
       {/* ══ TOP BAR ═════════════════════════════════════════════════ */}
       <div className="relative z-20 flex-shrink-0"
@@ -169,20 +186,20 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
 
           {/* Trump indicator */}
           {round.trumpSuit ? (
-            <div className="flex items-center gap-2 px-4 py-1.5 rounded-full"
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
               style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.2)' }}>
-              <Zap style={{ width: fs(15), height: fs(15), color: '#d4a843' }} />
-              <span style={{ fontSize: fs(14), color: 'rgba(255,255,255,0.55)' }}>Trump</span>
-              <span style={{ fontSize: fs(28), lineHeight: 1, color: suitCols[round.trumpSuit] }}>
+              <Zap style={{ width: fs(14), height: fs(14), color: '#d4a843' }} />
+              {!isMobilePortrait && <span style={{ fontSize: fs(13), color: 'rgba(255,255,255,0.55)' }}>Trump</span>}
+              <span style={{ fontSize: fs(24), lineHeight: 1, color: suitCols[round.trumpSuit] }}>
                 {suitSymbols[round.trumpSuit]}
               </span>
             </div>
           ) : config.trumpMethod === 'cut_hukum' ? (
-            <div className="flex items-center gap-2 px-4 py-1.5 rounded-full animate-pulse"
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full animate-pulse"
               style={{ background: 'rgba(212,168,67,0.04)', border: '1px dashed rgba(212,168,67,0.28)' }}>
-              <Zap style={{ width: fs(15), height: fs(15), color: 'rgba(212,168,67,0.6)' }} />
-              <span style={{ fontSize: fs(14), color: 'rgba(212,168,67,0.7)' }}>Cut Hukum</span>
-              <span style={{ fontSize: fs(14), color: 'rgba(255,255,255,0.3)' }}>?</span>
+              <Zap style={{ width: fs(14), height: fs(14), color: 'rgba(212,168,67,0.6)' }} />
+              {!isMobilePortrait && <span style={{ fontSize: fs(13), color: 'rgba(212,168,67,0.7)' }}>Cut Hukum</span>}
+              <span style={{ fontSize: fs(13), color: 'rgba(255,255,255,0.3)' }}>?</span>
             </div>
           ) : null}
 
@@ -239,8 +256,8 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
         )}
       </div>
 
-      {/* ══ STATUS BAR ══════════════════════════════════════════════ */}
-      <div className="relative z-20 flex-shrink-0"
+      {/* ══ STATUS BAR (landscape only) ════════════════════════════ */}
+      {!isMobilePortrait && <div className="relative z-20 flex-shrink-0"
         style={{ background: 'rgba(0,0,0,0.35)', borderBottom: '1px solid rgba(212,168,67,0.06)', padding: `${isLandscape ? 5 : 8}px 18px` }}>
         <div className="flex items-center justify-between">
 
@@ -282,10 +299,35 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
             )}
           </div>
         </div>
-      </div>
+      </div>}
+
+      {/* ══ PORTRAIT STATUS STRIP ══════════════════════════════════ */}
+      {isMobilePortrait && (
+        <div className="relative z-20 flex-shrink-0 flex items-center justify-between w-full px-3 py-1"
+          style={{ background: 'rgba(0,0,0,0.45)', borderBottom: '1px solid rgba(212,168,67,0.07)' }}>
+          <div className="flex items-center gap-3">
+            <span style={{ fontSize: 11, color: 'rgba(212,168,67,0.55)' }}>#{round.trickNumber}/{totalTricks}</span>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)' }}>{handCount} left</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span style={{ fontSize: 12, color: '#6fa3d4', fontWeight: 700 }}>{round.teamMindis[0]}</span>
+            <Target style={{ width: 11, height: 11, color: 'rgba(212,168,67,0.4)' }} />
+            <span style={{ fontSize: 12, color: '#d47070', fontWeight: 700 }}>{round.teamMindis[1]}</span>
+          </div>
+          {round.trumpSuit ? (
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded-full"
+              style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.2)' }}>
+              <Zap style={{ width: 10, height: 10, color: '#d4a843' }} />
+              <span style={{ fontSize: 16, color: suitCols[round.trumpSuit], lineHeight: 1 }}>{suitSymbols[round.trumpSuit]}</span>
+            </div>
+          ) : config.trumpMethod === 'cut_hukum' ? (
+            <span style={{ fontSize: 11, color: 'rgba(212,168,67,0.4)' }}>Cut ?</span>
+          ) : null}
+        </div>
+      )}
 
       {/* ── AI thinking ─────────────────────────────────────────────── */}
-      {!isMyTurn && !trickPause && aiPlayers?.has(round.currentTurnSeatIndex) && (
+      {!isMobilePortrait && !isMyTurn && !trickPause && aiPlayers?.has(round.currentTurnSeatIndex) && (
         <div className="absolute top-28 left-1/2 -translate-x-1/2 z-30">
           <div className="px-5 py-2 rounded-full flex items-center gap-2.5 animate-pulse"
             style={{ background: 'rgba(20,6,6,0.88)', border: '1px solid rgba(212,168,67,0.2)', backdropFilter: 'blur(8px)' }}>
@@ -297,8 +339,234 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
         </div>
       )}
 
-      {/* ══ MIDDLE — trick table ════════════════════════════════════ */}
-      <div className="relative z-10 flex-1 min-h-0 flex items-center justify-center px-2">
+      {/* ══ PORTRAIT AI THINKING ═══════════════════════════════════ */}
+      {isMobilePortrait && !isMyTurn && !trickPause && aiPlayers?.has(round.currentTurnSeatIndex) && (
+        <div className="relative z-20 flex-shrink-0 flex items-center justify-center py-1.5"
+          style={{ background: 'rgba(0,0,0,0.3)' }}>
+          <div className="flex items-center gap-2 px-4 py-1 rounded-full animate-pulse"
+            style={{ background: 'rgba(20,6,6,0.88)', border: '1px solid rgba(212,168,67,0.2)' }}>
+            <span style={{ fontSize: 14 }}>{AVATARS[round.currentTurnSeatIndex]}</span>
+            <span style={{ fontSize: 11, color: 'rgba(212,168,67,0.75)' }}>
+              {gameState.players[round.currentTurnSeatIndex]?.name} thinking…
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* ══ PORTRAIT MIDDLE ════════════════════════════════════════ */}
+      {isMobilePortrait && (
+        <div className="relative z-10 flex-1 min-h-0 flex flex-col items-center justify-center gap-3 px-3 py-2">
+
+          {trickPause ? (
+            /* Portrait trick pause */
+            <div className="flex flex-col items-center gap-3 animate-fade-in">
+              <div className="px-4 py-2 rounded-xl flex items-center gap-2"
+                style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.22)' }}>
+                <Crown style={{ width: 15, height: 15, color: '#d4a843' }} />
+                <span style={{ fontSize: 13, color: '#d4a843', fontWeight: 700 }}>{trickPause.winnerName} wins!</span>
+                {trickPause.mindisWon > 0 && (
+                  <span style={{ fontSize: 11, color: '#d4a843', background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.28)', padding: '2px 8px', borderRadius: 99 }}>
+                    +{trickPause.mindisWon} Mindi
+                  </span>
+                )}
+              </div>
+              <div className="flex items-end gap-3 flex-wrap justify-center">
+                {trickPause.cards.map(entry => {
+                  const isW = entry.seatIndex === trickPause.winnerSeatIndex;
+                  const tc2 = TEAM_COL[gameState.players[entry.seatIndex]?.teamId ?? 0];
+                  return (
+                    <div key={`pp-${entry.card.id}`} className="flex flex-col items-center gap-1">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm"
+                        style={{ background: tc2.bg, border: `2px solid ${tc2.border}` }}>
+                        {AVATARS[entry.seatIndex]}
+                      </div>
+                      <span style={{ fontSize: 9, color: isW ? '#d4a843' : 'rgba(255,255,255,0.3)' }}>
+                        {gameState.players[entry.seatIndex]?.name?.slice(0, 6)}
+                      </span>
+                      <div style={{ filter: isW ? 'drop-shadow(0 0 8px rgba(212,168,67,0.5))' : undefined }}>
+                        <Card card={entry.card} faceUp size="sm" />
+                      </div>
+                      {isW && <Crown style={{ width: 12, height: 12, color: '#d4a843' }} />}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Portrait table */
+            <div className="relative flex-shrink-0" style={{ width: pTW + pBS * 2, height: pTH + pBS * 2 }}>
+
+              {/* Non-local player badges */}
+              {gameState.players.map((p, seatIdx) => {
+                if (seatIdx === myPlayerIndex) return null;
+                const relIdx = (seatIdx - myPlayerIndex + config.playerCount) % config.playerCount;
+                const isCurrent = seatIdx === round.currentTurnSeatIndex;
+                const hasPlayed = round.currentTrick.cards.some(e => e.seatIndex === seatIdx);
+                const tc2 = TEAM_COL[p.teamId];
+
+                // Compute badge position — side badges pinned to screen border, never over the table
+                let bx = pBS + pTW / 2;
+                let by = pBS + pTH / 2;
+                let anchor = 'translate(-50%,-50%)';
+                let isLR = false;
+                let isLeft = false;
+
+                if (config.playerCount === 4) {
+                  // right | top | left
+                  if (relIdx === 1) { bx = pBS + pTW + 4; by = pBS + pTH / 2; anchor = 'translateY(-50%)'; isLR = true; }
+                  else if (relIdx === 2) { bx = pBS + pTW / 2; by = 4; anchor = 'translate(-50%,0)'; }
+                  else if (relIdx === 3) { bx = pBS - 4; by = pBS + pTH / 2; anchor = 'translate(-100%,-50%)'; isLR = true; isLeft = true; }
+                } else if (config.playerCount === 6) {
+                  // top | right-upper | right-lower | left-upper | left-lower
+                  if      (relIdx === 3) { bx = pBS + pTW / 2;  by = 4;                  anchor = 'translate(-50%,0)';        }
+                  else if (relIdx === 2) { bx = pBS + pTW + 4;  by = pBS + pTH * 0.22;   anchor = 'translateY(-50%)';         isLR = true; }
+                  else if (relIdx === 1) { bx = pBS + pTW + 4;  by = pBS + pTH * 0.78;   anchor = 'translateY(-50%)';         isLR = true; }
+                  else if (relIdx === 4) { bx = pBS - 4;        by = pBS + pTH * 0.22;   anchor = 'translate(-100%,-50%)';    isLR = true; isLeft = true; }
+                  else if (relIdx === 5) { bx = pBS - 4;        by = pBS + pTH * 0.78;   anchor = 'translate(-100%,-50%)';    isLR = true; isLeft = true; }
+                } else {
+                  // 8/10 players: circular formula, but snap top-center to just above the table
+                  const topRelIdx = config.playerCount / 2; // relIdx with sin≈-1 (directly opposite)
+                  if (relIdx === topRelIdx) {
+                    // Pin directly above the table, matching the 4/6-player top badge style
+                    bx = pBS + pTW / 2;
+                    by = -32;
+                    anchor = 'translate(-50%,-50%)';
+                  } else {
+                    const angle = -(360 / config.playerCount) * relIdx + 90;
+                    const rad = angle * Math.PI / 180;
+                    const distX = pTW / 2 + pBS * 0.7;
+                    const distY = pTH / 2 + pBS * 0.85;
+                    bx = pBS + pTW / 2 + Math.cos(rad) * distX;
+                    by = pBS + pTH / 2 + Math.sin(rad) * distY;
+                    anchor = 'translate(-50%,-50%)';
+                  }
+                }
+
+                return (
+                  <div key={seatIdx} className="absolute" style={{ left: bx, top: by, transform: anchor, zIndex: 20 }}>
+                    {isLR ? (
+                      /* Vertical pill — side players (left / right border) */
+                      <div className="flex flex-col items-center gap-1 px-2 py-1.5 rounded-2xl"
+                        style={{
+                          background: isCurrent ? 'rgba(212,168,67,0.12)' : tc2.bg,
+                          border: `1px solid ${isCurrent ? 'rgba(212,168,67,0.45)' : tc2.border}`,
+                          minWidth: 28,
+                        }}>
+                        <span style={{ fontSize: 12 }}>{AVATARS[seatIdx]}</span>
+                        <span style={{
+                          fontSize: 11, fontWeight: 800,
+                          writingMode: 'vertical-lr' as const,
+                          textOrientation: 'mixed' as const,
+                          color: isCurrent ? '#d4a843' : hasPlayed ? 'rgba(34,197,94,0.85)' : 'rgba(255,255,255,0.75)',
+                          transform: isLeft ? 'rotate(180deg)' : undefined,
+                          letterSpacing: '0.05em',
+                        }}>
+                          {p.name[0]?.toUpperCase()}
+                        </span>
+                        <span style={{ fontSize: 9, color: tc2.text }}>{round.teamTricks[p.teamId]}</span>
+                        {isCurrent && <span className="animate-pulse" style={{ fontSize: 7, color: '#d4a843' }}>●</span>}
+                      </div>
+                    ) : (
+                      /* Horizontal pill — top player (and all badges for 8/10p circular layout) */
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+                        style={{
+                          background: isCurrent ? 'rgba(212,168,67,0.12)' : tc2.bg,
+                          border: `1px solid ${isCurrent ? 'rgba(212,168,67,0.45)' : tc2.border}`,
+                        }}>
+                        <span style={{ fontSize: config.playerCount >= 6 ? 12 : 14 }}>{AVATARS[seatIdx]}</span>
+                        <span style={{ fontSize: config.playerCount >= 6 ? 11 : 12, fontWeight: 700, color: isCurrent ? '#d4a843' : hasPlayed ? 'rgba(34,197,94,0.85)' : 'rgba(255,255,255,0.8)' }}>
+                          {config.playerCount >= 6 ? p.name[0]?.toUpperCase() : p.name.slice(0, 8)}
+                        </span>
+                        <span style={{ fontSize: 10, color: tc2.text }}>{round.teamTricks[p.teamId]}</span>
+                        {isCurrent && <span className="animate-pulse" style={{ fontSize: 8, color: '#d4a843' }}>●</span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Table rectangle */}
+              <div className="absolute rounded-3xl"
+                style={{
+                  left: pBS, top: pBS,
+                  width: pTW, height: pTH,
+                  background: 'radial-gradient(ellipse at 50% 40%, rgba(212,168,67,0.03), rgba(0,0,0,0.35))',
+                  border: '1px solid rgba(212,168,67,0.1)',
+                  boxShadow: '0 8px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.02)',
+                  overflow: 'hidden',
+                }}>
+
+                {/* Mindi captures — small badges inside top corners */}
+                {([0, 1] as const).map(teamId => {
+                  const mindis = capturedMindis[teamId];
+                  const captured = SUIT_ORDER.filter(s => mindis[s] > 0);
+                  if (!captured.length) return null;
+                  const tc = TEAM_COL[teamId];
+                  return (
+                    <div key={teamId} className="absolute top-2 flex items-center gap-1"
+                      style={{ [teamId === 0 ? 'left' : 'right']: 8 }}>
+                      {captured.map(suit => (
+                        <div key={suit} className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-md"
+                          style={{ background: tc.bg, border: `1px solid ${tc.border}` }}>
+                          <span style={{ color: suitCols[suit], fontSize: 12, lineHeight: 1 }}>{suitSymbols[suit]}</span>
+                          {mindis[suit] > 1 && <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.55)' }}>×{mindis[suit]}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+
+                {/* Empty state */}
+                {round.currentTrick.cards.length === 0 && (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span style={{ fontSize: 11, color: 'rgba(212,168,67,0.15)', letterSpacing: '0.1em' }}>PLAY</span>
+                  </div>
+                )}
+
+                {/* Played cards */}
+                {round.currentTrick.cards.map((entry, i) => {
+                  const relIdx = (entry.seatIndex - myPlayerIndex + config.playerCount) % config.playerCount;
+                  const { x, y } = pCardPos(relIdx);
+                  const isLatest = i === round.currentTrick.cards.length - 1;
+                  return (
+                    <div key={`${entry.seatIndex}-${entry.card.id}`} className="absolute transition-all duration-300"
+                      style={{
+                        left: pTW / 2 + x,
+                        top: pTH / 2 + y,
+                        transform: 'translate(-50%,-50%)',
+                        zIndex: 10 + i,
+                        filter: isLatest ? 'drop-shadow(0 0 8px rgba(212,168,67,0.35))' : undefined,
+                      }}>
+                      <Card card={entry.card} faceUp size="sm" />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* YOU badge — bottom center, sits just below the table container */}
+              <div className="absolute" style={{ left: pBS + pTW / 2, bottom: -50, transform: 'translateX(-50%)', zIndex: 20 }}>
+                <div className="flex items-center gap-2 px-4 py-1.5 rounded-full"
+                  style={{
+                    background: isMyTurn && !trickPause ? 'rgba(212,168,67,0.15)' : TEAM_COL[myPlayer.teamId].bg,
+                    border: `1px solid ${isMyTurn && !trickPause ? 'rgba(212,168,67,0.55)' : TEAM_COL[myPlayer.teamId].border}`,
+                  }}>
+                  <span style={{ fontSize: 15 }}>{AVATARS[myPlayerIndex]}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: isMyTurn && !trickPause ? '#d4a843' : 'rgba(255,255,255,0.85)' }}>
+                    {myPlayer.name.slice(0, 10)}
+                  </span>
+                  <span style={{ fontSize: 10, color: TEAM_COL[myPlayer.teamId].text }}>
+                    {round.teamTricks[myPlayer.teamId]}
+                  </span>
+                  {isMyTurn && !trickPause && <span className="animate-pulse" style={{ fontSize: 8, color: '#d4a843' }}>●</span>}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ══ LANDSCAPE MIDDLE — trick table ══════════════════════════ */}
+      {!isMobilePortrait && <div className="relative z-10 flex-1 min-h-0 flex items-center justify-center px-2">
 
         {/* Mindi capture panels */}
         {([0, 1] as const).map(teamId => {
@@ -378,7 +646,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
             localSeatIndex={myPlayerIndex}
           />
         )}
-      </div>
+      </div>}
 
       {/* ══ BOTTOM — hand ═══════════════════════════════════════════ */}
       {/*
@@ -388,18 +656,18 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
       */}
       <div className="relative z-20 flex-shrink-0"
         style={{ paddingBottom: isLandscape ? 12 : 20, paddingTop: 4, overflow: 'visible' }}>
-        <div className='flex justify-center flex-row-reverse'>
-          {/* YOUR TURN banner */}
-          {isMyTurn && !aiPlayers?.has(myPlayerIndex) && (
-            <div className="flex justify-center mb-2.5">
-              <div className="px-7 py-2 rounded-full font-cinzel tracking-wider animate-bounce-subtle animate-border-glow-gold align-content-center"
-                style={{ fontSize: "12px", alignSelf: 'anchor-center', background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.45)', color: '#d4a843', boxShadow: '0 0 20px rgba(212,168,67,0.12)' }}>
-                YOUR TURN — Pick a card
-              </div>
+        {/* YOUR TURN banner */}
+        {isMyTurn && !aiPlayers?.has(myPlayerIndex) && (
+          <div className="flex justify-center mb-2">
+            <div className="px-6 py-1.5 rounded-full font-cinzel tracking-wider animate-bounce-subtle animate-border-glow-gold"
+              style={{ fontSize: 12, background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.45)', color: '#d4a843', boxShadow: '0 0 20px rgba(212,168,67,0.12)' }}>
+              YOUR TURN — Pick a card
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Player identity row */}
+        {/* Player identity row — landscape only */}
+        {!isMobilePortrait && (
           <div className="flex items-center justify-center mb-2.5 px-4">
             <div className="flex items-center gap-3 px-5 py-2 rounded-full"
               style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(212,168,67,0.1)' }}>
@@ -414,7 +682,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
               </span>
             </div>
           </div>
-        </div>
+        )}
 
         {/*
           Card fan — NO overflow clipping here.
