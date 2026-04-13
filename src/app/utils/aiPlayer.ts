@@ -17,7 +17,7 @@ export class AIPlayer {
    */
   selectCard(hand: Card[], gameState: GameState, playerIndex: number): Card {
     const { round } = gameState;
-    const { currentTrick, trumpSuit } = round;
+    const { currentTrick } = round;
 
     // Filter playable cards based on game rules
     const playableCards = this.getPlayableCards(hand, currentTrick.ledSuit);
@@ -65,9 +65,7 @@ export class AIPlayer {
   /**
    * Easy strategy: Random selection with slight preference for low cards
    */
-  private playEasyStrategy(playableCards: Card[], gameState: GameState): Card {
-    const { round } = gameState;
-
+  private playEasyStrategy(playableCards: Card[], _gameState: GameState): Card {
     // 70% chance to play randomly, 30% chance to play lowest card
     if (Math.random() < 0.7) {
       return playableCards[Math.floor(Math.random() * playableCards.length)];
@@ -123,7 +121,6 @@ export class AIPlayer {
 
     const myTeam = gameState.players[playerIndex].teamId;
     const teamMindisCount = teamMindis[myTeam];
-    const totalMindis = gameState.config.totalMindis;
     const mindiMajority = gameState.config.mindiMajority;
 
     // Strategic considerations

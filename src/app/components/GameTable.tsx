@@ -25,10 +25,10 @@ interface GameTableProps {
 }
 
 const suitSymbols: Record<string, string> = { hearts: '♥', diamonds: '♦', spades: '♠', clubs: '♣' };
-const suitCols: Record<string, string>    = { hearts: '#e53e3e', diamonds: '#dd6b20', spades: '#a0aec0', clubs: '#a0aec0' };
+const suitCols: Record<string, string> = { hearts: '#e53e3e', diamonds: '#dd6b20', spades: '#a0aec0', clubs: '#a0aec0' };
 const SUIT_ORDER = ['hearts', 'diamonds', 'spades', 'clubs'] as const;
 const TEAM_COL = [
-  { bg: 'rgba(96,165,250,0.12)',  border: 'rgba(96,165,250,0.3)',  text: '#6fa3d4', label: 'A' },
+  { bg: 'rgba(96,165,250,0.12)', border: 'rgba(96,165,250,0.3)', text: '#6fa3d4', label: 'A' },
   { bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.3)', text: '#d47070', label: 'B' },
 ];
 
@@ -47,7 +47,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
   const [menuOpen, setMenuOpen] = useState(false);
   const [dealing, setDealing] = useState(true);
   const prevTrickRef = useRef(round.trickNumber);
-  const prevTurnRef  = useRef(round.currentTurnSeatIndex);
+  const prevTurnRef = useRef(round.currentTurnSeatIndex);
 
   const handCount = myPlayer.hand.length;
 
@@ -63,29 +63,29 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
     window.addEventListener('orientationchange', () => setTimeout(update, 100));
     return () => window.removeEventListener('resize', update);
   }, []);
-  const isLandscape      = winSize.w > winSize.h;
+  const isLandscape = winSize.w > winSize.h;
   const isMobilePortrait = winSize.h > winSize.w && winSize.w < 900;
 
   // ── Card size ──────────────────────────────────────────────────────
   const cardSz: 'sm' | 'md' = isLandscape && winSize.h < 500 ? 'sm' : 'md';
-  const cardH  = cardSz === 'sm' ? 90  : 118;
-  const cardW  = cardSz === 'sm' ? 64  : 84;
+  const cardH = cardSz === 'sm' ? 90 : 118;
+  const cardW = cardSz === 'sm' ? 64 : 84;
 
   // ── Hand geometry ──────────────────────────────────────────────────
   // Extra horizontal padding to accommodate corner overshoot from rotation
-  const handPadX  = 52;
-  const maxW      = Math.min(winSize.w - 24, 760);
-  const overlap   = handCount > 1 ? Math.max(24, Math.min(60, (maxW - cardW - handPadX * 2) / (handCount - 1))) : 0;
-  const maxRot    = Math.min(handCount * 1.4, 20);
+  const handPadX = 52;
+  const maxW = Math.min(winSize.w - 24, 760);
+  const overlap = handCount > 1 ? Math.max(24, Math.min(60, (maxW - cardW - handPadX * 2) / (handCount - 1))) : 0;
+  const maxRot = Math.min(handCount * 1.4, 20);
 
   // Extra bottom space: rotated bottom corner extends sin(maxRot) * cardW/2 below pivot
   const rotBottomOverflow = Math.ceil(Math.sin((maxRot * Math.PI) / 180) * (cardW / 2)) + 6;
   // Height must contain top of most-rotated card: cos(maxRot)*cardH + sin(maxRot)*cardW/2
   const rotTopReach = Math.ceil(Math.cos((maxRot * Math.PI) / 180) * cardH + Math.sin((maxRot * Math.PI) / 180) * (cardW / 2));
-  const handHeight  = rotTopReach + rotBottomOverflow + 20; // comfortable buffer
+  const handHeight = rotTopReach + rotBottomOverflow + 20; // comfortable buffer
 
   // Total container width including side padding for rotation overshoot
-  const innerWidth  = handCount > 1 ? cardW + overlap * (handCount - 1) : cardW;
+  const innerWidth = handCount > 1 ? cardW + overlap * (handCount - 1) : cardW;
   const totalHandWidth = innerWidth + handPadX * 2;
 
   // ── Table size ─────────────────────────────────────────────────────
@@ -94,11 +94,11 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
     const land = w > h;
     const overhead = land ? 280 : 440;
     const maxTableW = land ? Math.min(w * 0.55, h - 30) : w - 16;
-    const availH    = (h - overhead) * 0.95;
+    const availH = (h - overhead) * 0.95;
     return Math.floor(Math.min(maxTableW, availH, 560));
   }, [winSize]);
 
-  const totalTricks = Math.floor((40 * config.deckCount) / config.playerCount);
+  const totalTricks = 15;
 
   // ── Sounds ────────────────────────────────────────────────────────
   useEffect(() => { setDealing(true); const t = setTimeout(() => setDealing(false), 800); return () => clearTimeout(t); }, []);
@@ -107,7 +107,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
   useEffect(() => {
     if (round.currentTurnSeatIndex !== prevTurnRef.current || round.trickNumber !== prevTrickRef.current) {
       if (!dealing) Sounds.cardPlay();
-      prevTurnRef.current  = round.currentTurnSeatIndex;
+      prevTurnRef.current = round.currentTurnSeatIndex;
       prevTrickRef.current = round.trickNumber;
     }
   }, [round.currentTurnSeatIndex, round.trickNumber, dealing]);
@@ -119,7 +119,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
 
   // ── Hand sort: suits grouped, colors alternate ♥ ♠ ♦ ♣ ────────────
   const sortedHand = useMemo(() => {
-    const rv = (r: string) => ({ '3':1,'2':2,'7':3,'8':4,'9':5,'10':6,'J':7,'Q':8,'K':9,'A':10 } as Record<string,number>)[r] ?? 0;
+    const rv = (r: string) => ({ '3': 1, '2': 2, '7': 3, '8': 4, '9': 5, '10': 6, 'J': 7, 'Q': 8, 'K': 9, 'A': 10 } as Record<string, number>)[r] ?? 0;
     const suitOrder: Record<string, number> = { hearts: 0, spades: 1, diamonds: 2, clubs: 3 };
     return [...myPlayer.hand].sort((a, b) =>
       suitOrder[a.suit] !== suitOrder[b.suit]
@@ -130,7 +130,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
 
   // ── Captured mindis ────────────────────────────────────────────────
   const capturedMindis = useMemo(() => {
-    const r: [Record<string,number>, Record<string,number>] = [{}, {}];
+    const r: [Record<string, number>, Record<string, number>] = [{}, {}];
     for (const trick of round.completedTricks) {
       if (!trick.mindisInTrick) continue;
       const team = gameState.players[trick.winnerSeatIndex]?.teamId ?? 0;
@@ -201,7 +201,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
             <span style={{ fontSize: fs(16), color: 'rgba(255,255,255,0.25)' }}>–</span>
             <span className="font-bold tabular-nums" style={{ fontSize: fs(26), color: '#d47070', lineHeight: 1 }}>{gameState.gamePoints[1]}</span>
             {scoreExpanded
-              ? <ChevronUp  style={{ width: fs(16), height: fs(16), color: 'rgba(212,168,67,0.5)' }} />
+              ? <ChevronUp style={{ width: fs(16), height: fs(16), color: 'rgba(212,168,67,0.5)' }} />
               : <ChevronDown style={{ width: fs(16), height: fs(16), color: 'rgba(212,168,67,0.5)' }} />}
           </button>
 
@@ -236,7 +236,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
                   <div style={{ fontSize: fs(11), color: 'rgba(255,255,255,0.25)' }}>Trick</div>
                   <div className="font-bold text-white" style={{ fontSize: fs(28) }}>{round.trickNumber}</div>
                   <div className="w-full h-1 rounded-full mt-2 overflow-hidden" style={{ background: 'rgba(255,255,255,0.07)' }}>
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(100,(round.trickNumber/totalTricks)*100)}%`, background: 'linear-gradient(90deg,#d4a843,#b8892a)', transition: 'width 0.4s' }} />
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, (round.trickNumber / totalTricks) * 100)}%`, background: 'linear-gradient(90deg,#d4a843,#b8892a)', transition: 'width 0.4s' }} />
                   </div>
                 </div>
               ))}
@@ -280,7 +280,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
                 <div className={`w-2.5 h-2.5 rounded-full ${isMyTurn ? 'animate-pulse' : ''}`}
                   style={{ background: isMyTurn ? '#d4a843' : 'rgba(255,255,255,0.18)', boxShadow: isMyTurn ? '0 0 8px rgba(212,168,67,0.75)' : 'none' }} />
                 <span style={{ fontSize: fs(15), color: isMyTurn ? '#d4a843' : 'rgba(255,255,255,0.4)', fontWeight: isMyTurn ? 700 : 400 }}>
-                  {isMyTurn ? 'Your turn' : `${AVATARS[round.currentTurnSeatIndex]} ${gameState.players[round.currentTurnSeatIndex]?.name?.slice(0,10) ?? ''}`}
+                  {isMyTurn ? 'Your turn' : `${AVATARS[round.currentTurnSeatIndex]} ${gameState.players[round.currentTurnSeatIndex]?.name?.slice(0, 10) ?? ''}`}
                 </span>
               </>
             ) : (
@@ -308,9 +308,9 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
 
         {/* Mindi capture panels */}
         {([0, 1] as const).map(teamId => {
-          const tc     = TEAM_COL[teamId];
+          const tc = TEAM_COL[teamId];
           const mindis = capturedMindis[teamId];
-          const has    = SUIT_ORDER.some(s => mindis[s] > 0);
+          const has = SUIT_ORDER.some(s => mindis[s] > 0);
           return (
             <div key={teamId} className="absolute top-1/2 -translate-y-1/2 z-20 flex flex-col items-center gap-1.5"
               style={{ [teamId === 0 ? 'left' : 'right']: 8 }}>
@@ -350,8 +350,8 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
             </div>
             <div className="flex items-end gap-4 flex-wrap justify-center">
               {trickPause.cards.map(entry => {
-                const isW   = entry.seatIndex === trickPause.winnerSeatIndex;
-                const tc    = TEAM_COL[gameState.players[entry.seatIndex]?.teamId ?? 0];
+                const isW = entry.seatIndex === trickPause.winnerSeatIndex;
+                const tc = TEAM_COL[gameState.players[entry.seatIndex]?.teamId ?? 0];
                 return (
                   <div key={`p-${entry.card.id}`} className="flex flex-col items-center gap-2">
                     <div className="flex flex-col items-center gap-1">
@@ -394,32 +394,32 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
       */}
       <div className="relative z-20 flex-shrink-0"
         style={{ paddingBottom: isLandscape ? 12 : 20, paddingTop: 4, overflow: 'visible' }}>
-          <div className='flex justify-center flex-row-reverse'>
-        {/* YOUR TURN banner */}
-        {isMyTurn && !aiPlayers?.has(myPlayerIndex) && (
-          <div className="flex justify-center mb-2.5">
-            <div className="px-7 py-2 rounded-full font-cinzel tracking-wider animate-bounce-subtle animate-border-glow-gold align-content-center"
-              style={{ fontSize: "12px", alignSelf: 'anchor-center' , background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.45)', color: '#d4a843', boxShadow: '0 0 20px rgba(212,168,67,0.12)' }}>
-              YOUR TURN — Pick a card
+        <div className='flex justify-center flex-row-reverse'>
+          {/* YOUR TURN banner */}
+          {isMyTurn && !aiPlayers?.has(myPlayerIndex) && (
+            <div className="flex justify-center mb-2.5">
+              <div className="px-7 py-2 rounded-full font-cinzel tracking-wider animate-bounce-subtle animate-border-glow-gold align-content-center"
+                style={{ fontSize: "12px", alignSelf: 'anchor-center', background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.45)', color: '#d4a843', boxShadow: '0 0 20px rgba(212,168,67,0.12)' }}>
+                YOUR TURN — Pick a card
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Player identity row */}
-        <div className="flex items-center justify-center mb-2.5 px-4">
-          <div className="flex items-center gap-3 px-5 py-2 rounded-full"
-            style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(212,168,67,0.1)' }}>
-            <div className="rounded-full flex items-center justify-center flex-shrink-0 text-xl"
-              style={{ width: 36, height: 36, background: TEAM_COL[myPlayer.teamId].bg, border: `1.5px solid ${TEAM_COL[myPlayer.teamId].border}` }}>
-              {AVATARS[myPlayerIndex]}
+          {/* Player identity row */}
+          <div className="flex items-center justify-center mb-2.5 px-4">
+            <div className="flex items-center gap-3 px-5 py-2 rounded-full"
+              style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(212,168,67,0.1)' }}>
+              <div className="rounded-full flex items-center justify-center flex-shrink-0 text-xl"
+                style={{ width: 36, height: 36, background: TEAM_COL[myPlayer.teamId].bg, border: `1.5px solid ${TEAM_COL[myPlayer.teamId].border}` }}>
+                {AVATARS[myPlayerIndex]}
+              </div>
+              <span className="text-white font-semibold" style={{ fontSize: fs(16) }}>{myPlayer.name}</span>
+              <span style={{ color: 'rgba(212,168,67,0.25)' }}>·</span>
+              <span style={{ fontSize: fs(14), color: myPlayer.teamId === 0 ? 'rgba(111,163,212,0.8)' : 'rgba(212,112,112,0.8)' }}>
+                Team {myPlayer.teamId === 0 ? 'A' : 'B'}
+              </span>
             </div>
-            <span className="text-white font-semibold" style={{ fontSize: fs(16) }}>{myPlayer.name}</span>
-            <span style={{ color: 'rgba(212,168,67,0.25)' }}>·</span>
-            <span style={{ fontSize: fs(14), color: myPlayer.teamId === 0 ? 'rgba(111,163,212,0.8)' : 'rgba(212,112,112,0.8)' }}>
-              Team {myPlayer.teamId === 0 ? 'A' : 'B'}
-            </span>
           </div>
-        </div>
         </div>
 
         {/*
@@ -431,9 +431,9 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
         <div className="w-full flex justify-center" style={{ overflow: 'visible' }}>
           <div className="relative" style={{ width: totalHandWidth, height: handHeight, overflow: 'visible' }}>
             {sortedHand.map((card: CardType, index: number) => {
-              const centre   = index - (handCount - 1) / 2;
+              const centre = index - (handCount - 1) / 2;
               const rotation = handCount > 1 ? (centre / ((handCount - 1) / 2)) * maxRot : 0;
-              const yOffset  = Math.abs(centre) * (handCount > 6 ? 1.2 : 2);
+              const yOffset = Math.abs(centre) * (handCount > 6 ? 1.2 : 2);
               const isPlayable = playableIds.has(card.id);
               return (
                 <div key={card.id} className="absolute transition-all duration-200"

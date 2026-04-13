@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(claude plugin:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(pip install:*)",
+      "Bash(code-review-graph install:*)",
+      "Bash(python -m code_review_graph install --platform claude-code)",
+      "Bash(python -c \"import code_review_graph; print\\(code_review_graph.__file__\\)\")",
+      "Bash(python -m code_review_graph build)",
+      "Bash(npm --version)",
+      "Bash(pnpm add:*)",
+      "Bash(npm install:*)",
+      "Bash(npm --prefix server install)",
+      "Bash(ls tsconfig*)",
+      "Bash(npm --prefix server run build)",
+      "Bash(pnpm run:*)",
+      "Bash(pnpm install:*)",
+      "Bash(xargs grep:*)",
+      "Bash(pnpm list:*)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:d[k] for k in ['exports','types','main','module'] if k in d}, indent=2\\)\\)\")",
+      "Bash(node -e \"const d=require\\('./node_modules/.pnpm/react@18.3.1/node_modules/react/package.json'\\); console.log\\(JSON.stringify\\({exports:d.exports,types:d.types,main:d.main},null,2\\)\\)\")",
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"const d=require\\('./node_modules/.pnpm/lucide-react@0.487.0_react@18.3.1/node_modules/lucide-react/package.json'\\); console.log\\(JSON.stringify\\({main:d.main,module:d.module,types:d.types,exports:d.exports},null,2\\)\\)\")"
+    ]
+  }
+}

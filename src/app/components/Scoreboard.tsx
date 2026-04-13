@@ -7,7 +7,7 @@ const suitSymbols: Record<string, string> = { hearts: '♥', diamonds: '♦', sp
 const suitCols: Record<string, string> = { hearts: '#b91c1c', diamonds: '#c2410c', spades: '#475569', clubs: '#475569' };
 
 export function Scoreboard({ gameState }: ScoreboardProps) {
-  const { gamePoints, round, config } = gameState;
+  const { gamePoints, round } = gameState;
 
   return (
     <div className="royal-glass rounded-xl p-4">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeft, Play, Users, Bot, User, Settings, Target, Zap } from 'lucide-react';
+import { ArrowLeft, Users, Bot, Settings, Target, Zap } from 'lucide-react';
 import { TrumpMethod } from '../types';
 import { Sounds } from '../utils/sounds';
 

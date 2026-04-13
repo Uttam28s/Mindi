@@ -1,0 +1,34 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|Bash",
+        "command": "code-review-graph update --quiet",
+        "timeout": 5000
+      }
+    ],
+    "SessionStart": [
+      {
+        "command": "code-review-graph status --json",
+        "timeout": 3000
+      }
+    ],
+    "PreCommit": [
+      {
+        "command": "code-review-graph detect-changes --brief",
+        "timeout": 10000
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(ls node_modules/.bin/tsc*)",
+      "Bash(node_modules/.bin/vite build:*)",
+      "Bash(git -C \"c:/Users/Uttam/Desktop/Projects/Games/Mindi\" config --list)",
+      "Bash(git config:*)",
+      "Bash(node_modules/.bin/tsc --noEmit)"
+    ]
+  }
+}

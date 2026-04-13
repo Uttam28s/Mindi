@@ -215,7 +215,7 @@ export default function App() {
   const [onlineSettings, setOnlineSettings] = useState<{ playerCount: number; trumpMethod: string; gamePointsTarget: number } | null>(null);
   const [isHost, setIsHost] = useState(false);
   // AI hands tracked by host in mixed online games: seatIndex → cards
-  const [onlineAiHands, setOnlineAiHands] = useState<Map<number, Card[]>>(new Map());
+  const [_onlineAiHands, setOnlineAiHands] = useState<Map<number, Card[]>>(new Map());
 
   // Trick-complete display: keep cards visible for a pause before clearing
   const [trickPause, setTrickPause] = useState<{
