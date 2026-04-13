@@ -33,9 +33,9 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
   const [myName, setMyName] = useState(() => localStorage.getItem('mindi_player_name') || '');
   const [players, setPlayers] = useState<PlayerConfig[]>(
     Array(4).fill(null).map((_, i) => ({
-      name: i === 0 ? 'You' : INDIAN_AI_NAMES[i - 1] ?? `Player ${i + 1}`,
-      isAI: i !== 0,
-      aiDifficulty: i !== 0 ? 'medium' : undefined
+      name: i === 0 ? 'You' : `Player ${i + 1}`,
+      isAI: false,
+      aiDifficulty: undefined
     }))
   );
 
@@ -44,14 +44,14 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
     setPlayerCount(count);
     setPlayers(Array(count).fill(null).map((_, i) => {
       if (i < players.length) return players[i];
-      return { name: INDIAN_AI_NAMES[i - 1] ?? `Player ${i + 1}`, isAI: true, aiDifficulty: 'medium' as const };
+      return { name: `Player ${i + 1}`, isAI: false, aiDifficulty: undefined };
     }));
   };
 
-  const togglePlayerType = (index: number) => {
+  const setPlayerType = (index: number, isAI: boolean) => {
     Sounds.click();
     const np = [...players];
-    np[index] = { ...np[index], isAI: !np[index].isAI, name: !np[index].isAI ? (INDIAN_AI_NAMES[index - 1] ?? `Player ${index + 1}`) : `Player ${index + 1}`, aiDifficulty: !np[index].isAI ? 'medium' : undefined };
+    np[index] = { ...np[index], isAI, name: isAI ? (INDIAN_AI_NAMES[index - 1] ?? `Player ${index + 1}`) : `Player ${index + 1}`, aiDifficulty: isAI ? 'medium' : undefined };
     setPlayers(np);
   };
 
@@ -122,13 +122,21 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
                       <span className="text-white text-sm">{i === 0 ? 'You' : `Seat ${i + 1}`}</span>
                     </div>
                     {i !== 0 && (
-                      <button onClick={() => togglePlayerType(i)}
-                        className="px-2 py-0.5 rounded text-[9px] font-bold tracking-wider"
-                        style={{
-                          background: player.isAI ? 'rgba(212,168,67,0.1)' : 'rgba(34,197,94,0.1)',
-                          border: `1px solid ${player.isAI ? 'rgba(212,168,67,0.25)' : 'rgba(34,197,94,0.25)'}`,
-                          color: player.isAI ? '#d4a843' : '#22c55e',
-                        }}>{player.isAI ? 'AI' : 'HUMAN'}</button>
+                      <div className="flex rounded overflow-hidden" style={{ border: '1px solid rgba(255,255,255,0.08)' }}>
+                        <button onClick={() => setPlayerType(i, false)}
+                          className="px-2.5 py-0.5 text-[9px] font-bold tracking-wider transition-all"
+                          style={{
+                            background: !player.isAI ? 'rgba(34,197,94,0.15)' : 'transparent',
+                            borderRight: '1px solid rgba(255,255,255,0.08)',
+                            color: !player.isAI ? '#22c55e' : 'rgba(255,255,255,0.25)',
+                          }}>HUMAN</button>
+                        <button onClick={() => setPlayerType(i, true)}
+                          className="px-2.5 py-0.5 text-[9px] font-bold tracking-wider transition-all"
+                          style={{
+                            background: player.isAI ? 'rgba(212,168,67,0.15)' : 'transparent',
+                            color: player.isAI ? '#d4a843' : 'rgba(255,255,255,0.25)',
+                          }}>AI</button>
+                      </div>
                     )}
                   </div>
                   {i === 0 && (
