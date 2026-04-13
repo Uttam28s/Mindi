@@ -145,31 +145,40 @@ export function getLobbyPlayers(room: Room): LobbyPlayer[] {
     }));
 }
 
-/** Shuffle team assignments: balanced [0,1,0,1,...] randomly permuted. */
-function shuffleTeams(playerCount: number): TeamId[] {
-  const half = playerCount / 2;
-  const teams: TeamId[] = [...Array(half).fill(0 as TeamId), ...Array(half).fill(1 as TeamId)];
-  // Fisher-Yates shuffle
-  for (let i = teams.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [teams[i], teams[j]] = [teams[j], teams[i]];
-  }
-  return teams;
-}
-
 /** Start the game. Fails if not all seats filled or already started. */
 export function startGame(room: Room): GameState | { error: string } {
   if (room.phase !== 'lobby') return { error: 'Already started' };
   if (room.seats.some(s => s === null)) return { error: 'Not all players joined' };
 
-  // Shuffle team assignments once at game start
-  const teamIds = shuffleTeams(room.playerCount);
-  room.teamIds = teamIds;
+  // Randomly shuffle PLAYERS among seats, then assign alternating teams.
+  // This guarantees no two same-team players ever sit adjacent (Mindi rule).
+  const allSeats = room.seats as RoomSeat[];
+  const shuffled = [...allSeats];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
 
-  // Update seat records so getLobbyPlayers reflects the shuffled teams
+  const half = room.playerCount / 2;
+  const newSeats: (RoomSeat | null)[] = Array(room.playerCount).fill(null);
+  const teamIds: TeamId[] = Array(room.playerCount).fill(0) as TeamId[];
+
+  // First half → even seats (Team 0); second half → odd seats (Team 1)
+  for (let k = 0; k < half; k++) {
+    const evenIdx = k * 2;
+    newSeats[evenIdx] = { ...shuffled[k], seatIndex: evenIdx, teamId: 0 };
+    teamIds[evenIdx] = 0;
+  }
+  for (let k = 0; k < half; k++) {
+    const oddIdx = k * 2 + 1;
+    newSeats[oddIdx] = { ...shuffled[half + k], seatIndex: oddIdx, teamId: 1 };
+    teamIds[oddIdx] = 1;
+  }
+
+  room.seats = newSeats;
+  room.teamIds = teamIds; // always [0,1,0,1,...] — preserved for subsequent rounds
+
   const seats = room.seats as RoomSeat[];
-  seats.forEach((seat, i) => { seat.teamId = teamIds[i]; });
-
   const state = initGame(
     room.code,
     seats.map(s => s.name),

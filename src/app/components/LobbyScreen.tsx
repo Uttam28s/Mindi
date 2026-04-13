@@ -38,10 +38,9 @@ export function LobbyScreen({ roomCode, players, maxPlayers, isHost, mySeatIndex
   };
 
   const canStart = players.length === maxPlayers;
-  const waitingCount = maxPlayers - players.length; // human seats still empty (AI pre-filled)
-  const teamA = players.filter(p => p.teamId === 0);
-  const teamB = players.filter(p => p.teamId === 1);
+  const waitingCount = maxPlayers - players.length;
   const trumpLabels: Record<string, string> = { random: 'Random', band_hukum_a: 'Band A', band_hukum_b: 'Band B', cut_hukum: 'Cut Hukum' };
+  const sortedPlayers = [...players].sort((a, b) => a.seatIndex - b.seatIndex);
 
   return (
     <div className="min-h-screen flex items-center justify-center p-5" style={{ background: 'linear-gradient(160deg, #1a0505, #2d0a0a, #1e0808)' }}>
@@ -62,65 +61,81 @@ export function LobbyScreen({ roomCode, players, maxPlayers, isHost, mySeatIndex
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            {[{ team: teamA, label: 'Team A', color: '96,165,250' }, { team: teamB, label: 'Team B', color: '248,113,113' }].map(({ team, label, color }) => (
-              <div key={label}>
-                <div className="flex items-center gap-2 mb-2 px-1">
-                  <div className="w-2 h-2 rounded-full" style={{ background: `rgb(${color})` }} />
-                  <span className="text-[10px] tracking-wider" style={{ color: `rgba(${color},0.7)` }}>{label.toUpperCase()}</span>
-                </div>
-                <div className="space-y-1.5">
-                  {team.map((p) => {
-                    const isMe = p.seatIndex === mySeatIndex;
-                    const isEditing = isMe && editingName;
-                    return (
-                    <div key={p.seatIndex} className="flex items-center gap-2.5 px-3 py-2 rounded-lg" style={{ background: `rgba(${color},0.04)`, border: `1px solid rgba(${color},${isMe ? '0.22' : '0.1'})` }}>
-                      <span className="text-lg">{AVATARS[p.seatIndex]}</span>
-                      <div className="flex-1 min-w-0">
-                        {isEditing ? (
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              autoFocus
-                              type="text"
-                              value={nameInput}
-                              onChange={e => setNameInput(e.target.value.slice(0, 20))}
-                              onKeyDown={e => { if (e.key === 'Enter') saveEditName(); if (e.key === 'Escape') setEditingName(false); }}
-                              className="flex-1 px-2 py-0.5 rounded text-xs text-white focus:outline-none min-w-0"
-                              style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(212,168,67,0.35)' }}
-                            />
-                            <button onClick={saveEditName}
-                              className="text-[10px] px-2 py-0.5 rounded font-bold"
-                              style={{ background: 'rgba(212,168,67,0.15)', color: '#d4a843', border: '1px solid rgba(212,168,67,0.3)', flexShrink: 0 }}>
-                              Save
-                            </button>
-                            <button onClick={() => setEditingName(false)} style={{ flexShrink: 0 }}>
-                              <X className="w-3 h-3" style={{ color: 'rgba(255,255,255,0.3)' }} />
-                            </button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm text-white truncate">{p.name}</span>
-                            {isMe && (
-                              <>
-                                <span className="text-[8px] px-1 rounded" style={{ background: 'rgba(212,168,67,0.12)', color: '#d4a843', border: '1px solid rgba(212,168,67,0.25)', flexShrink: 0 }}>You</span>
-                                {onRenamePlayer && (
-                                  <button onClick={startEditName} className="ml-0.5 flex-shrink-0">
-                                    <Pencil className="w-3 h-3" style={{ color: 'rgba(212,168,67,0.5)' }} />
-                                  </button>
-                                )}
-                              </>
-                            )}
-                          </div>
-                        )}
-                        {p.isAI && <div className="text-[8px]" style={{ color: 'rgba(212,168,67,0.4)' }}>AI · {p.aiDifficulty}</div>}
+          {/* Teams will be revealed when the game starts */}
+          <div className="mb-2 px-1">
+            <span className="text-[9px] uppercase tracking-wider" style={{ color: 'rgba(212,168,67,0.35)' }}>Players</span>
+          </div>
+
+          <div className="space-y-1.5 mb-5">
+            {sortedPlayers.map((p) => {
+              const isMe = p.seatIndex === mySeatIndex;
+              const isEditing = isMe && editingName;
+              return (
+                <div key={p.seatIndex} className="flex items-center gap-2.5 px-3 py-2 rounded-lg"
+                  style={{
+                    background: isMe ? 'rgba(212,168,67,0.05)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${isMe ? 'rgba(212,168,67,0.22)' : 'rgba(255,255,255,0.06)'}`
+                  }}>
+                  <span className="text-lg">{AVATARS[p.seatIndex]}</span>
+                  <div className="flex-1 min-w-0">
+                    {isEditing ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={nameInput}
+                          onChange={e => setNameInput(e.target.value.slice(0, 20))}
+                          onKeyDown={e => { if (e.key === 'Enter') saveEditName(); if (e.key === 'Escape') setEditingName(false); }}
+                          className="flex-1 px-2 py-0.5 rounded text-xs text-white focus:outline-none min-w-0"
+                          style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(212,168,67,0.35)' }}
+                        />
+                        <button onClick={saveEditName}
+                          className="text-[10px] px-2 py-0.5 rounded font-bold"
+                          style={{ background: 'rgba(212,168,67,0.15)', color: '#d4a843', border: '1px solid rgba(212,168,67,0.3)', flexShrink: 0 }}>
+                          Save
+                        </button>
+                        <button onClick={() => setEditingName(false)} style={{ flexShrink: 0 }}>
+                          <X className="w-3 h-3" style={{ color: 'rgba(255,255,255,0.3)' }} />
+                        </button>
                       </div>
-                      {p.isHost && !isEditing && <Crown className="w-3 h-3" style={{ color: '#d4a843' }} />}
-                    </div>
-                    );
-                  })}
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm text-white truncate">{p.name}</span>
+                        {isMe && (
+                          <>
+                            <span className="text-[8px] px-1 rounded" style={{ background: 'rgba(212,168,67,0.12)', color: '#d4a843', border: '1px solid rgba(212,168,67,0.25)', flexShrink: 0 }}>You</span>
+                            {onRenamePlayer && (
+                              <button onClick={startEditName} className="ml-0.5 flex-shrink-0">
+                                <Pencil className="w-3 h-3" style={{ color: 'rgba(212,168,67,0.5)' }} />
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                    {p.isAI && <div className="text-[8px]" style={{ color: 'rgba(212,168,67,0.4)' }}>AI · {p.aiDifficulty}</div>}
+                  </div>
+                  {p.isHost && !isEditing && <Crown className="w-3 h-3" style={{ color: '#d4a843' }} />}
                 </div>
+              );
+            })}
+
+            {/* Empty seat placeholders */}
+            {Array.from({ length: waitingCount }).map((_, i) => (
+              <div key={`empty-${i}`} className="flex items-center gap-2.5 px-3 py-2 rounded-lg"
+                style={{ background: 'rgba(255,255,255,0.01)', border: '1px dashed rgba(255,255,255,0.06)' }}>
+                <span className="text-lg" style={{ opacity: 0.2 }}>?</span>
+                <span className="text-sm" style={{ color: 'rgba(255,255,255,0.2)' }}>Waiting for player...</span>
               </div>
             ))}
+          </div>
+
+          {/* Teams revealed hint */}
+          <div className="flex items-center justify-center gap-2 py-2 mb-4 rounded-lg"
+            style={{ background: 'rgba(212,168,67,0.03)', border: '1px solid rgba(212,168,67,0.08)' }}>
+            <span className="text-[10px] tracking-wide" style={{ color: 'rgba(212,168,67,0.4)' }}>
+              Teams will be revealed when the game starts
+            </span>
           </div>
 
           <div className="flex items-center justify-center gap-6 py-2.5 mb-5 rounded-lg" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(212,168,67,0.06)' }}>

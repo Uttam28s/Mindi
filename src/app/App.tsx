@@ -7,11 +7,12 @@ import { GameTable } from './components/GameTable';
 import { RoundResult } from './components/RoundResult';
 import { GameOver } from './components/GameOver';
 import { LoadingScreen } from './components/LoadingScreen';
+import { TeamShuffleAnimation } from './components/TeamShuffleAnimation';
 import { GameState, Card, Player, Suit, Rank, CompletedTrick } from './types';
 import { AIPlayer } from './utils/aiPlayer';
 import { connectSocket, disconnectSocket, getSocket } from './utils/socket';
 
-type Screen = 'home' | 'setup' | 'join' | 'lobby' | 'loading' | 'game' | 'round_result' | 'game_over';
+type Screen = 'home' | 'setup' | 'join' | 'lobby' | 'loading' | 'team_reveal' | 'game' | 'round_result' | 'game_over';
 
 // ─── Deck & Deal ───────────────────────────────────────────────
 // PRD §5: Active cards = ranks 8–A only (28 per deck).
@@ -93,13 +94,9 @@ function getDeckCount(playerCount: number): 2 | 3 | 4 | 5 {
 }
 
 function shuffleLocalTeams(playerCount: number): (0 | 1)[] {
-  const half = playerCount / 2;
-  const teams: (0 | 1)[] = [...Array(half).fill(0 as 0 | 1), ...Array(half).fill(1 as 0 | 1)];
-  for (let i = teams.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [teams[i], teams[j]] = [teams[j], teams[i]];
-  }
-  return teams;
+  // 50/50 coin flip: [0,1,0,1,...] or [1,0,1,0,...] — guarantees teammates never sit adjacent
+  const startTeam = Math.random() < 0.5 ? 0 : 1;
+  return Array.from({ length: playerCount }, (_, i) => ((i + startTeam) % 2) as 0 | 1);
 }
 
 function getTotalMindis(playerCount: number): 8 | 12 | 16 | 20 {
@@ -216,6 +213,8 @@ export default function App() {
   const [isHost, setIsHost] = useState(false);
   // AI hands tracked by host in mixed online games: seatIndex → cards
   const [_onlineAiHands, setOnlineAiHands] = useState<Map<number, Card[]>>(new Map());
+  // Team reveal animation data
+  const [teamRevealPlayers, setTeamRevealPlayers] = useState<{ name: string; teamId: 0|1; seatIndex: number }[]>([]);
 
   // Trick-complete display: keep cards visible for a pause before clearing
   const [trickPause, setTrickPause] = useState<{
@@ -272,7 +271,9 @@ export default function App() {
           return { ...p, hand: [] };
         })
       };
-      setGameState(fullState); setMyHand(d.myHand); setMySeatIndex(d.mySeatIndex); setScreen('game');
+      setGameState(fullState); setMyHand(d.myHand); setMySeatIndex(d.mySeatIndex);
+      setTeamRevealPlayers(fullState.players.map(p => ({ name: p.name, teamId: p.teamId, seatIndex: p.seatIndex })));
+      setScreen('team_reveal');
     };
 
     const onCardPlayed = (d: { gameState: GameState; trickComplete: boolean; seatIndex: number; cardId: string }) => {
@@ -660,8 +661,10 @@ export default function App() {
 
     setScreen('loading');
     setTimeout(() => {
-      setGameState(buildGameState(setup, code, 0, [0, 0], teamIds));
-      setScreen('game');
+      const state = buildGameState(setup, code, 0, [0, 0], teamIds);
+      setGameState(state);
+      setTeamRevealPlayers(state.players.map(p => ({ name: p.name, teamId: p.teamId, seatIndex: p.seatIndex })));
+      setScreen('team_reveal');
     }, 1500);
   };
 
@@ -764,8 +767,10 @@ export default function App() {
       if (!currentSetup) return;
       setScreen('loading');
       setTimeout(() => {
-        setGameState(buildGameState(currentSetup, roomCode));
-        setScreen('game');
+        const state = buildGameState(currentSetup, roomCode);
+        setGameState(state);
+        setTeamRevealPlayers(state.players.map(p => ({ name: p.name, teamId: p.teamId, seatIndex: p.seatIndex })));
+        setScreen('team_reveal');
       }, 1500);
     }
   };
@@ -898,6 +903,13 @@ export default function App() {
 
       {screen === 'loading' && (
         <LoadingScreen message="Setting up the game..." />
+      )}
+
+      {screen === 'team_reveal' && (
+        <TeamShuffleAnimation
+          players={teamRevealPlayers}
+          onComplete={() => setScreen('game')}
+        />
       )}
 
       {screen === 'game' && gameState && (
