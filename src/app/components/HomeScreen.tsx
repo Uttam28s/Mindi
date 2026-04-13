@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Play, Users, Zap, X, BookOpen, ChevronRight } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Play, Users, Zap, X, BookOpen, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Sounds } from '../utils/sounds';
+import { StepVisual } from './HowToPlayVisuals';
 
 interface HomeScreenProps {
   onCreateGame: () => void;
@@ -126,8 +127,50 @@ const LANG_ORDER: Lang[] = ['en', 'hi', 'gu', 'mr', 'ta'];
 function HowToPlayModal({ onClose }: { onClose: () => void }) {
   const [lang, setLang] = useState<Lang>('en');
   const [step, setStep] = useState(0);
+  const [dragOffset, setDragOffset] = useState(0);   // live px offset while dragging
+  const [isDragging, setIsDragging] = useState(false);
+
   const content = LANG_CONTENT[lang];
   const totalSteps = content.steps.length;
+
+  // ── touch / mouse drag tracking ──────────────────────────────
+  const dragStartX = useRef<number | null>(null);
+  const SWIPE_THRESHOLD = 50; // px to trigger a step change
+
+  const goNext = () => setStep(s => Math.min(totalSteps - 1, s + 1));
+  const goPrev = () => setStep(s => Math.max(0, s - 1));
+
+  const onDragStart = (clientX: number) => {
+    dragStartX.current = clientX;
+    setIsDragging(true);
+    setDragOffset(0);
+  };
+  const onDragMove = (clientX: number) => {
+    if (dragStartX.current === null) return;
+    const delta = clientX - dragStartX.current;
+    // clamp so it doesn't slide too far
+    setDragOffset(Math.max(-120, Math.min(120, delta)));
+  };
+  const onDragEnd = (clientX: number) => {
+    if (dragStartX.current === null) return;
+    const delta = clientX - dragStartX.current;
+    if (delta < -SWIPE_THRESHOLD) goNext();
+    else if (delta > SWIPE_THRESHOLD) goPrev();
+    dragStartX.current = null;
+    setIsDragging(false);
+    setDragOffset(0);
+  };
+
+  // Touch handlers
+  const onTouchStart = (e: React.TouchEvent) => onDragStart(e.touches[0].clientX);
+  const onTouchMove  = (e: React.TouchEvent) => onDragMove(e.touches[0].clientX);
+  const onTouchEnd   = (e: React.TouchEvent) => onDragEnd(e.changedTouches[0].clientX);
+
+  // Mouse handlers (desktop drag)
+  const onMouseDown  = (e: React.MouseEvent) => onDragStart(e.clientX);
+  const onMouseMove  = (e: React.MouseEvent) => { if (isDragging) onDragMove(e.clientX); };
+  const onMouseUp    = (e: React.MouseEvent) => { if (isDragging) onDragEnd(e.clientX); };
+  const onMouseLeave = () => { if (isDragging) { setIsDragging(false); setDragOffset(0); dragStartX.current = null; } };
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -186,67 +229,95 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* ── Steps ── */}
-        <div className="px-5 pb-2" style={{ overflowY: 'auto', maxHeight: 280 }}>
+        <div className="pb-2" style={{ overflowY: 'auto', maxHeight: 440 }}>
 
           {/* Step indicator dots */}
-          <div className="flex items-center justify-center gap-1.5 mb-4">
+          <div className="flex items-center justify-center gap-1.5 mb-3 px-5">
             {content.steps.map((_, i) => (
               <button key={i} onClick={() => setStep(i)}
-                className="rounded-full transition-all"
+                className="rounded-full transition-all duration-300"
                 style={{
-                  width: i === step ? 18 : 6, height: 6,
+                  width: i === step ? 20 : 6, height: 6,
                   background: i === step ? '#d4a843' : 'rgba(212,168,67,0.2)',
                 }} />
             ))}
           </div>
 
-          {/* Active step card */}
-          {(() => {
-            const s = content.steps[step];
-            return (
-              <div className="rounded-2xl p-4 mb-3 animate-fade-in"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(212,168,67,0.1)' }}>
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.15)', fontSize: 24 }}>
-                    {s.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-cinzel font-bold mb-1.5" style={{ fontSize: 13, color: '#e8d5a8' }}>{s.title}</div>
-                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>{s.desc}</div>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
+          {/* ── Swipeable slide area ── */}
+          <div
+            style={{ overflow: 'hidden', position: 'relative', touchAction: 'pan-y' }}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+            onMouseLeave={onMouseLeave}
+          >
+            {/* Sliding track — shows current + ghost neighbours */}
+            <div style={{
+              display: 'flex',
+              transform: `translateX(calc(-${step * 100}% + ${dragOffset}px))`,
+              transition: isDragging ? 'none' : 'transform 0.32s cubic-bezier(0.25,1,0.5,1)',
+              willChange: 'transform',
+              userSelect: 'none',
+            }}>
+              {content.steps.map((s, i) => (
+                <div key={i} style={{ minWidth: '100%', padding: '0 20px', boxSizing: 'border-box' }}>
 
-          {/* Prev / Next */}
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={() => setStep(s => Math.max(0, s - 1))}
-              disabled={step === 0}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs transition-all"
-              style={{
-                background: step === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(212,168,67,0.08)',
-                border: `1px solid ${step === 0 ? 'rgba(255,255,255,0.05)' : 'rgba(212,168,67,0.2)'}`,
-                color: step === 0 ? 'rgba(255,255,255,0.2)' : 'rgba(212,168,67,0.7)',
-              }}>
-              ← Prev
-            </button>
-            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>{step + 1} / {totalSteps}</span>
-            <button onClick={() => setStep(s => Math.min(totalSteps - 1, s + 1))}
-              disabled={step === totalSteps - 1}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs transition-all"
-              style={{
-                background: step === totalSteps - 1 ? 'rgba(255,255,255,0.02)' : 'rgba(212,168,67,0.1)',
-                border: `1px solid ${step === totalSteps - 1 ? 'rgba(255,255,255,0.05)' : 'rgba(212,168,67,0.25)'}`,
-                color: step === totalSteps - 1 ? 'rgba(255,255,255,0.2)' : '#d4a843',
-              }}>
-              Next <ChevronRight style={{ width: 12, height: 12 }} />
-            </button>
+                  {/* Mini game screenshot — all languages */}
+                  <StepVisual step={i} />
+
+                  {/* Text card */}
+                  <div className="rounded-2xl p-4 mb-3"
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(212,168,67,0.1)' }}>
+                    <div className="flex items-start gap-3">
+                      <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+                        style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.15)', fontSize: 24 }}>
+                        {s.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-cinzel font-bold mb-1.5" style={{ fontSize: 13, color: '#e8d5a8' }}>{s.title}</div>
+                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>{s.desc}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              ))}
+            </div>
+
+            {/* Left / right edge tap zones + arrow hints */}
+            {step > 0 && (
+              <button onClick={goPrev}
+                className="absolute left-0 top-0 bottom-0 flex items-center justify-start pl-1"
+                style={{ width: 36, background: 'linear-gradient(90deg,rgba(18,4,4,0.5),transparent)', zIndex: 5 }}>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.2)' }}>
+                  <ChevronLeft style={{ width: 14, height: 14, color: 'rgba(212,168,67,0.7)' }} />
+                </div>
+              </button>
+            )}
+            {step < totalSteps - 1 && (
+              <button onClick={goNext}
+                className="absolute right-0 top-0 bottom-0 flex items-center justify-end pr-1"
+                style={{ width: 36, background: 'linear-gradient(270deg,rgba(18,4,4,0.5),transparent)', zIndex: 5 }}>
+                <div className="w-7 h-7 rounded-full flex items-center justify-center"
+                  style={{ background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.2)' }}>
+                  <ChevronRight style={{ width: 14, height: 14, color: 'rgba(212,168,67,0.7)' }} />
+                </div>
+              </button>
+            )}
+          </div>
+
+          {/* Step counter + swipe hint */}
+          <div className="flex items-center justify-center gap-2 mt-1 mb-4 px-5">
+            <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>{step + 1} / {totalSteps}</span>
+            <span style={{ fontSize: 9, color: 'rgba(212,168,67,0.25)' }}>· swipe or tap arrows ·</span>
           </div>
 
           {/* ── Scoring table ── */}
-          <div style={{ borderTop: '1px solid rgba(212,168,67,0.1)', paddingTop: 12, marginBottom: 16 }}>
+          <div className="px-5" style={{ borderTop: '1px solid rgba(212,168,67,0.1)', paddingTop: 12, marginBottom: 16 }}>
             <div className="font-cinzel text-xs mb-3 tracking-wider" style={{ color: 'rgba(212,168,67,0.55)' }}>SCORING</div>
             <div className="space-y-2">
               {content.scoring.map((row, i) => (
