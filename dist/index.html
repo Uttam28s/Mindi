@@ -15,9 +15,9 @@
     <link rel="canonical" href="https://mindi.vercel.app" />
 
     <!-- ── Favicon & App Icons ───────────────────────────────────── -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
-    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./favicon.svg" />
+    <link rel="manifest" href="./site.webmanifest" />
 
     <!-- ── Open Graph (Facebook, LinkedIn, WhatsApp) ────────────── -->
     <meta property="og:type" content="website" />
@@ -71,11 +71,17 @@
       "image": "https://mindi.vercel.app/og-image.svg"
     }
     </script>
-    <script type="module" crossorigin src="/assets/index-CtUXQqlY.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-BPRf9lTE.css">
+
+    <!-- ── CrazyGames SDK v3 ─────────────────────────────────────── -->
+    <!-- Loaded on every domain; SDK auto-disables on non-CrazyGames hosts -->
+    <script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+    <script type="module" crossorigin src="./assets/index-BK9dIG4z.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-C4tmJ29e.css">
   </head>
 
   <body>
+    <!-- Prevent text selection on touch devices (CrazyGames mobile requirement) -->
+    <style>* { -webkit-user-select: none; user-select: none; }</style>
     <div id="root"></div>
   </body>
 </html>

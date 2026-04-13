@@ -11,6 +11,7 @@ import { TeamShuffleAnimation } from './components/TeamShuffleAnimation';
 import { GameState, Card, Player, Suit, Rank, CompletedTrick } from './types';
 import { AIPlayer } from './utils/aiPlayer';
 import { connectSocket, disconnectSocket, getSocket } from './utils/socket';
+import { CG } from './utils/crazygames';
 
 type Screen = 'home' | 'setup' | 'join' | 'lobby' | 'loading' | 'team_reveal' | 'game' | 'round_result' | 'game_over';
 
@@ -227,6 +228,17 @@ export default function App() {
   const aiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trickPauseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localTeamIdsRef = useRef<(0 | 1)[] | null>(null);
+
+  // ── CrazyGames SDK: gameplay lifecycle signals ────────────────
+  // gameplayStart = player is actively playing cards
+  // gameplayStop  = any non-gameplay screen (menus, loading, results)
+  useEffect(() => {
+    if (screen === 'game') {
+      CG.gameplayStart();
+    } else {
+      CG.gameplayStop();
+    }
+  }, [screen]);
 
   // ─── Socket event payload types ──────────────────────────────
   type OnlineLobbyPlayer = { name: string; seatIndex: number; teamId: 0|1; connected: boolean; isAI?: boolean; aiDifficulty?: string };

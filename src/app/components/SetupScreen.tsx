@@ -164,7 +164,7 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
           <div className="royal-glass rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3">
               <Settings className="w-4 h-4" style={{ color: '#d4a843' }} />
-              <h3 className="font-cinzel text-sm text-white tracking-wide">Trump Method (હુકમ)</h3>
+              <h3 className="font-cinzel text-sm text-white tracking-wide">Trump Method (Hukum)</h3>
             </div>
             <div className="grid grid-cols-2 gap-2">
               {trumpOptions.map(o => (

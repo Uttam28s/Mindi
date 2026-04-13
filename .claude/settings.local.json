@@ -24,7 +24,10 @@
       "Bash(node -e \"const d=require\\('./node_modules/.pnpm/react@18.3.1/node_modules/react/package.json'\\); console.log\\(JSON.stringify\\({exports:d.exports,types:d.types,main:d.main},null,2\\)\\)\")",
       "Bash(npx tsc:*)",
       "Bash(node -e \"const d=require\\('./node_modules/.pnpm/lucide-react@0.487.0_react@18.3.1/node_modules/lucide-react/package.json'\\); console.log\\(JSON.stringify\\({main:d.main,module:d.module,types:d.types,exports:d.exports},null,2\\)\\)\")",
-      "Bash(pnpm build:*)"
+      "Bash(pnpm build:*)",
+      "WebFetch(domain:docs.crazygames.com)",
+      "WebFetch(domain:developer.crazygames.com)",
+      "Bash(xargs cat:*)"
     ]
   }
 }
