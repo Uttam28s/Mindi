@@ -72,19 +72,13 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
   const cardW = cardSz === 'sm' ? 64 : 84;
 
   // ── Hand geometry ──────────────────────────────────────────────────
-  // Extra horizontal padding to accommodate corner overshoot from rotation
-  const handPadX = 52;
+  const handPadX = 12;
   const maxW = Math.min(winSize.w - 24, 760);
-  const overlap = handCount > 1 ? Math.max(24, Math.min(60, (maxW - cardW - handPadX * 2) / (handCount - 1))) : 0;
-  const maxRot = Math.min(handCount * 1.4, 20);
+  const overlap = handCount > 1 ? Math.max(28, Math.min(40, (maxW - cardW - handPadX * 2) / (handCount - 1))) : 0;
 
-  // Extra bottom space: rotated bottom corner extends sin(maxRot) * cardW/2 below pivot
-  const rotBottomOverflow = Math.ceil(Math.sin((maxRot * Math.PI) / 180) * (cardW / 2)) + 6;
-  // Height must contain top of most-rotated card: cos(maxRot)*cardH + sin(maxRot)*cardW/2
-  const rotTopReach = Math.ceil(Math.cos((maxRot * Math.PI) / 180) * cardH + Math.sin((maxRot * Math.PI) / 180) * (cardW / 2));
-  const handHeight = rotTopReach + rotBottomOverflow + 20; // comfortable buffer
+  const handHeight = cardH + 28; // flat layout — no rotation overshoot needed
 
-  // Total container width including side padding for rotation overshoot
+  // Total container width
   const innerWidth = handCount > 1 ? cardW + overlap * (handCount - 1) : cardW;
   const totalHandWidth = innerWidth + handPadX * 2;
 
@@ -431,20 +425,13 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
         <div className="w-full flex justify-center" style={{ overflow: 'visible' }}>
           <div className="relative" style={{ width: totalHandWidth, height: handHeight, overflow: 'visible' }}>
             {sortedHand.map((card: CardType, index: number) => {
-              const centre = index - (handCount - 1) / 2;
-              const rotation = handCount > 1 ? (centre / ((handCount - 1) / 2)) * maxRot : 0;
-              const yOffset = Math.abs(centre) * (handCount > 6 ? 1.2 : 2);
               const isPlayable = playableIds.has(card.id);
               return (
                 <div key={card.id} className="absolute transition-all duration-200"
                   style={{
-                    // Offset by handPadX so left rotation corner stays within container
                     left: handPadX + index * overlap,
-                    // Sit cards above bottom overflow zone
-                    bottom: rotBottomOverflow + 2,
+                    bottom: 10,
                     zIndex: index,
-                    transform: `rotate(${rotation}deg) translateY(-${yOffset}px)`,
-                    transformOrigin: 'bottom center',
                   }}>
                   <Card
                     card={card}

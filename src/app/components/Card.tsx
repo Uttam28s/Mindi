@@ -59,29 +59,6 @@ function SuitIcon({ suit, size, color, style }: {
   }
 }
 
-// ── Pip layout ────────────────────────────────────────────────────────────────
-
-function getSuitPattern(count: number): number[][] {
-  const layouts: Record<number, number[][]> = {
-    1:  [[50, 50]],
-    2:  [[50, 22], [50, 78]],
-    3:  [[50, 18], [50, 50], [50, 82]],
-    4:  [[30, 22], [70, 22], [30, 78], [70, 78]],
-    5:  [[30, 18], [70, 18], [50, 50], [30, 82], [70, 82]],
-    6:  [[30, 18], [70, 18], [30, 50], [70, 50], [30, 82], [70, 82]],
-    7:  [[30, 15], [70, 15], [50, 33], [30, 50], [70, 50], [30, 85], [70, 85]],
-    8:  [[30, 15], [70, 15], [30, 36], [70, 36], [30, 64], [70, 64], [30, 85], [70, 85]],
-    9:  [[30, 13], [70, 13], [30, 36], [70, 36], [50, 50], [30, 64], [70, 64], [30, 87], [70, 87]],
-    10: [[30, 10], [70, 10], [50, 25], [30, 36], [70, 36], [30, 64], [70, 64], [50, 75], [30, 90], [70, 90]],
-  };
-  return layouts[count] || layouts[1];
-}
-
-function getPipCount(rank: string): number {
-  const n = parseInt(rank);
-  return isNaN(n) ? 1 : n;
-}
-
 const isFace = (rank: string) => ['J', 'Q', 'K'].includes(rank);
 
 const faceEmoji: Record<string, Record<string, string>> = {
@@ -130,8 +107,6 @@ export function Card({ card, faceUp = true, selected = false, playable = true, o
   }
 
   const face = isFace(card.rank);
-  const pipCount = getPipCount(card.rank);
-  const pips = getSuitPattern(face || card.rank === 'A' ? 1 : pipCount);
 
   return (
     <div
@@ -140,7 +115,7 @@ export function Card({ card, faceUp = true, selected = false, playable = true, o
         width: d.w,
         height: d.h,
         cursor: playable ? 'pointer' : 'default',
-        transform: selected ? 'translateY(-12px) scale(1.06)' : undefined,
+        transform: selected ? 'translateY(-20px) scale(1.08)' : undefined,
         transition: 'all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
         filter: !playable ? 'brightness(0.45) saturate(0.3) grayscale(0.3)' : undefined,
         animationDelay: dealDelay ? `${dealDelay}ms` : undefined,
@@ -205,16 +180,13 @@ export function Card({ card, faceUp = true, selected = false, playable = true, o
               </span>
             </div>
           ) : (
-            <div className="absolute" style={{ top: '14%', left: '18%', right: '18%', bottom: '14%' }}>
-              {pips.map((pos, i) => (
-                <div key={i} className="absolute" style={{
-                  left: `${pos[0]}%`,
-                  top: `${pos[1]}%`,
-                  transform: `translate(-50%, -50%) ${pos[1] > 60 ? 'rotate(180deg)' : ''}`,
-                }}>
-                  <SuitIcon suit={card.suit} size={d.pip} color={sc.main} />
-                </div>
-              ))}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <SuitIcon
+                suit={card.suit}
+                size={Math.round(d.center * 1.1)}
+                color={sc.main}
+                style={{ filter: `drop-shadow(0 1px 3px ${sc.accent})` }}
+              />
             </div>
           )}
         </div>
