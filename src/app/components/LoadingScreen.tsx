@@ -1,6 +1,14 @@
+import { useEffect } from 'react';
+import { CG } from '../utils/crazygames';
+
 interface LoadingScreenProps { message?: string; }
 
 export function LoadingScreen({ message = 'Loading...' }: LoadingScreenProps) {
+  useEffect(() => {
+    CG.loadingStart();
+    return () => { CG.loadingStop(); };
+  }, []);
+
   return (
     <div className="fixed inset-0 flex items-center justify-center z-50" style={{ background: 'linear-gradient(160deg, #1a0505, #2d0a0a, #1e0808)' }}>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] rounded-full animate-gold-pulse pointer-events-none"

@@ -11,6 +11,7 @@ import { TeamShuffleAnimation } from './components/TeamShuffleAnimation';
 import { GameState, Card, Player, Suit, Rank, CompletedTrick } from './types';
 import { AIPlayer } from './utils/aiPlayer';
 import { connectSocket, disconnectSocket, getSocket } from './utils/socket';
+import { CG } from './utils/crazygames';
 
 type Screen = 'home' | 'setup' | 'join' | 'lobby' | 'loading' | 'team_reveal' | 'game' | 'round_result' | 'game_over';
 
@@ -224,9 +225,104 @@ export default function App() {
     mindisWon: number;
   } | null>(null);
 
+  const [socketError, setSocketError] = useState<string | null>(null);
+  const [inviteRoomCode, setInviteRoomCode] = useState<string | null>(null);
   const aiTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const trickPauseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localTeamIdsRef = useRef<(0 | 1)[] | null>(null);
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── CrazyGames SDK: gameplay lifecycle signals ────────────────
+  // gameplayStart = player is actively playing cards
+  // gameplayStop  = any non-gameplay screen (menus, loading, results)
+  useEffect(() => {
+    if (screen === 'game') {
+      CG.gameplayStart();
+    } else {
+      CG.gameplayStop();
+    }
+  }, [screen]);
+
+
+  // ── CrazyGames startup: username, invite param, instant multiplayer ──
+  //
+  // Three things handled here (in priority order):
+  //  1. Get CrazyGames username → use as player name so CG usernames show in-game
+  //  2. Invite param (roomName) → player followed an invite link → auto-join
+  //  3. isInstantMultiplayer → party leader → skip setup, auto-create room
+  useEffect(() => {
+    const initCG = async () => {
+      // 1. Resolve player name: prefer CrazyGames account username
+      const cgUser = await CG.getUser();
+      const playerName = cgUser?.username || CG.loadData('mindi_player_name') || 'Player';
+      if (cgUser?.username) {
+        CG.saveData('mindi_player_name', cgUser.username);
+      }
+
+      // Helper: connect socket and auto-join a room
+      const autoJoin = (roomCode: string, name: string) => {
+        setIsOnlineMode(true);
+        setSocketError(null);
+        setScreen('loading');
+        const s = connectSocket();
+        connectTimeoutRef.current = setTimeout(() => {
+          if (s.connected) return;
+          s.disconnect();
+          setIsOnlineMode(false);
+          setScreen('join');
+          setSocketError('Could not connect to the game server. Please try again.');
+        }, 10_000);
+        const doJoin = () => {
+          if (connectTimeoutRef.current) { clearTimeout(connectTimeoutRef.current); connectTimeoutRef.current = null; }
+          s.emit('join_room', { roomCode: roomCode.toUpperCase(), playerName: name });
+        };
+        if (s.connected) doJoin(); else s.once('connect', doJoin);
+      };
+
+      // Helper: connect socket and auto-create a room with default settings
+      const autoCreate = (name: string) => {
+        setIsOnlineMode(true);
+        setSocketError(null);
+        setScreen('loading');
+        const s = connectSocket();
+        connectTimeoutRef.current = setTimeout(() => {
+          if (s.connected) return;
+          s.disconnect();
+          setIsOnlineMode(false);
+          setScreen('home');
+          setSocketError('Could not connect to the game server. Please try again.');
+        }, 10_000);
+        const doCreate = () => {
+          if (connectTimeoutRef.current) { clearTimeout(connectTimeoutRef.current); connectTimeoutRef.current = null; }
+          // Default settings for instant multiplayer: 4 players, random trump, 5-point game
+          s.emit('create_room', { playerName: name, playerCount: 4, trumpMethod: 'random', gamePointsTarget: 5 });
+        };
+        if (s.connected) doCreate(); else s.once('connect', doCreate);
+      };
+
+      // 2. Invite param — this player followed an invite link
+      const inviteRoom = CG.getInviteParam('roomName');
+      if (inviteRoom) {
+        if (cgUser?.username) {
+          // Logged-in CG user: auto-join without showing join screen
+          autoJoin(inviteRoom, playerName);
+        } else {
+          // Guest: pre-fill room code and show join screen for name entry
+          setInviteRoomCode(inviteRoom.toUpperCase());
+          setScreen('join');
+        }
+        return;
+      }
+
+      // 3. Instant multiplayer — this player is the party leader
+      if (CG.isInstantMultiplayer()) {
+        autoCreate(playerName);
+      }
+    };
+
+    initCG();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ─── Socket event payload types ──────────────────────────────
   type OnlineLobbyPlayer = { name: string; seatIndex: number; teamId: 0|1; connected: boolean; isAI?: boolean; aiDifficulty?: string };
@@ -675,7 +771,7 @@ export default function App() {
   const handleRenamePlayer = (newName: string) => {
     const trimmed = newName.trim().slice(0, 20);
     if (!trimmed) return;
-    localStorage.setItem(PLAYER_NAME_KEY, trimmed);
+    CG.saveData(PLAYER_NAME_KEY, trimmed);
     if (isOnlineMode) {
       getSocket().emit('rename_player', { roomCode, newName: trimmed });
       return;
@@ -705,7 +801,7 @@ export default function App() {
   };
 
   const handleQuickPlay = () => {
-    const savedName = localStorage.getItem('mindi_player_name') || 'You';
+    const savedName = CG.loadData('mindi_player_name') || 'You';
     const quickSetup: GameSetup = {
       playerCount: 4,
       trumpMethod: 'cut_hukum',
@@ -735,6 +831,7 @@ export default function App() {
 
     // Online mode — supports all-human and mixed human+AI
     setIsOnlineMode(true);
+    setSocketError(null);
     setScreen('loading');
     const aiSlots = aiPlayers.map(p => ({
       seatIndex: setup.players.indexOf(p),
@@ -749,7 +846,21 @@ export default function App() {
       ...(aiSlots.length > 0 && { aiSlots }),
     };
     const socket = connectSocket();
-    const doCreate = () => socket.emit('create_room', payload);
+
+    // Timeout: if we haven't connected within 10 s, show an error instead of
+    // hanging forever (common when VITE_SERVER_URL is missing in the build).
+    connectTimeoutRef.current = setTimeout(() => {
+      if (socket.connected) return;
+      socket.disconnect();
+      setIsOnlineMode(false);
+      setScreen('setup');
+      setSocketError('Could not connect to the game server. Please try again or check your connection.');
+    }, 10_000);
+
+    const doCreate = () => {
+      if (connectTimeoutRef.current) { clearTimeout(connectTimeoutRef.current); connectTimeoutRef.current = null; }
+      socket.emit('create_room', payload);
+    };
     if (socket.connected) {
       doCreate();
     } else {
@@ -777,9 +888,20 @@ export default function App() {
 
   const handleJoinSubmit = (code: string, playerName: string) => {
     setIsOnlineMode(true);
+    setSocketError(null);
     setScreen('loading');
     const socket = connectSocket();
+
+    connectTimeoutRef.current = setTimeout(() => {
+      if (socket.connected) return;
+      socket.disconnect();
+      setIsOnlineMode(false);
+      setScreen('join');
+      setSocketError('Could not connect to the game server. Please try again or check your connection.');
+    }, 10_000);
+
     const doJoin = () => {
+      if (connectTimeoutRef.current) { clearTimeout(connectTimeoutRef.current); connectTimeoutRef.current = null; }
       socket.emit('join_room', { roomCode: code.toUpperCase(), playerName });
     };
     if (socket.connected) {
@@ -850,11 +972,27 @@ export default function App() {
       )}
 
       {screen === 'setup' && (
-        <SetupScreen onBack={handleBack} onStart={handleSetupComplete} />
+        <>
+          <SetupScreen onBack={handleBack} onStart={handleSetupComplete} />
+          {socketError && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-lg text-sm text-center max-w-xs"
+              style={{ background: 'rgba(180,30,30,0.92)', color: '#fff', border: '1px solid rgba(255,100,100,0.4)' }}>
+              {socketError}
+            </div>
+          )}
+        </>
       )}
 
       {screen === 'join' && (
-        <JoinGameScreen onBack={handleBack} onJoin={handleJoinSubmit} />
+        <>
+          <JoinGameScreen onBack={handleBack} onJoin={handleJoinSubmit} defaultRoomCode={inviteRoomCode ?? undefined} />
+          {socketError && (
+            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-3 rounded-lg text-sm text-center max-w-xs"
+              style={{ background: 'rgba(180,30,30,0.92)', color: '#fff', border: '1px solid rgba(255,100,100,0.4)' }}>
+              {socketError}
+            </div>
+          )}
+        </>
       )}
 
       {screen === 'lobby' && (

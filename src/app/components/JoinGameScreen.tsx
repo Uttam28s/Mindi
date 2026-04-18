@@ -1,22 +1,25 @@
 import { useState } from 'react';
 import { ArrowLeft, LogIn, User } from 'lucide-react';
 import { Sounds } from '../utils/sounds';
+import { CG } from '../utils/crazygames';
 
 interface JoinGameScreenProps {
   onBack: () => void;
   onJoin: (roomCode: string, playerName: string) => void;
+  /** Pre-filled room code when arriving via a CrazyGames invite link */
+  defaultRoomCode?: string;
 }
 
-export function JoinGameScreen({ onBack, onJoin }: JoinGameScreenProps) {
-  const [roomCode, setRoomCode] = useState('');
-  const [playerName, setPlayerName] = useState(() => localStorage.getItem('mindi_player_name') || '');
+export function JoinGameScreen({ onBack, onJoin, defaultRoomCode }: JoinGameScreenProps) {
+  const [roomCode, setRoomCode] = useState(defaultRoomCode ?? '');
+  const [playerName, setPlayerName] = useState(() => CG.loadData('mindi_player_name') || '');
   const [error, setError] = useState('');
 
   const handleJoin = () => {
     if (!playerName.trim()) { setError('Enter your name'); return; }
     if (roomCode.length !== 6) { setError('Enter a valid 6-char code'); return; }
     Sounds.click();
-    localStorage.setItem('mindi_player_name', playerName.trim());
+    CG.saveData('mindi_player_name', playerName.trim());
     onJoin(roomCode.toUpperCase(), playerName.trim());
   };
 

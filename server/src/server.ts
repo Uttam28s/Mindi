@@ -9,16 +9,37 @@ import { cleanupStaleRooms } from './rooms/roomManager';
 dotenv.config();
 
 const PORT = process.env.PORT || 3001;
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
+
+// Support comma-separated list of allowed origins.
+// Always allows all *.crazygames.com subdomains for the CrazyGames platform.
+const rawOrigins = (process.env.CLIENT_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true; // same-origin / non-browser requests
+  if (rawOrigins.includes(origin)) return true;
+  if (/^https?:\/\/([a-z0-9-]+\.)*crazygames\.com$/.test(origin)) return true;
+  return false;
+}
+
+const corsOriginFn = (
+  origin: string | undefined,
+  callback: (err: Error | null, allow?: boolean) => void
+) => {
+  if (isAllowedOrigin(origin)) callback(null, true);
+  else callback(new Error(`CORS: origin ${origin} not allowed`));
+};
 
 const app = express();
-app.use(cors({ origin: CLIENT_ORIGIN }));
+app.use(cors({ origin: corsOriginFn }));
 app.use(express.json());
 
 const httpServer = http.createServer(app);
 
 const io = new Server(httpServer, {
-  cors: { origin: CLIENT_ORIGIN, methods: ['GET', 'POST'] },
+  cors: { origin: corsOriginFn, methods: ['GET', 'POST'] },
   transports: ['websocket', 'polling']
 });
 
