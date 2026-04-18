@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Copy, Check, Crown, Play, ArrowLeft, Pencil, X } from 'lucide-react';
 import { Sounds } from '../utils/sounds';
+import { CG } from '../utils/crazygames';
 
 const AVATARS = ['🦁', '🦅', '🐘', '🦚', '🐅', '🐍', '🦎', '🐎', '🐒', '🦜'];
 
@@ -17,6 +18,12 @@ export function LobbyScreen({ roomCode, players, maxPlayers, isHost, mySeatIndex
   const [copied, setCopied] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState('');
+
+  // Show CrazyGames invite button while in lobby; hide when component unmounts
+  useEffect(() => {
+    CG.showInviteButton(roomCode);
+    return () => { CG.hideInviteButton(); };
+  }, [roomCode]);
 
   const startEditName = () => {
     const me = players.find(p => p.seatIndex === mySeatIndex);
@@ -164,6 +171,7 @@ export function LobbyScreen({ roomCode, players, maxPlayers, isHost, mySeatIndex
               </div>
             </button>
           )}
+
         </div>
       </div>
     </div>

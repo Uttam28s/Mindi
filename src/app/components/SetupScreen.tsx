@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, Users, Bot, Settings, Target, Zap } from 'lucide-react';
 import { TrumpMethod } from '../types';
 import { Sounds } from '../utils/sounds';
+import { CG } from '../utils/crazygames';
 
 const INDIAN_AI_NAMES = ['Arjun', 'Priya', 'Vikram', 'Kavita', 'Rahul', 'Deepa', 'Amit', 'Sunita', 'Ravi', 'Meena'];
 
@@ -30,7 +31,7 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
   const [playerCount, setPlayerCount] = useState<4 | 6 | 8 | 10>(4);
   const [trumpMethod, setTrumpMethod] = useState<TrumpMethod>('random');
   const [gamePointsTarget, setGamePointsTarget] = useState<3 | 5 | 7 | 10>(5);
-  const [myName, setMyName] = useState(() => localStorage.getItem('mindi_player_name') || '');
+  const [myName, setMyName] = useState(() => CG.loadData('mindi_player_name') || '');
   const [players, setPlayers] = useState<PlayerConfig[]>(
     Array(4).fill(null).map((_, i) => ({
       name: i === 0 ? 'You' : `Player ${i + 1}`,
@@ -212,7 +213,7 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
           <button onClick={() => {
             Sounds.click();
             const resolvedName = myName.trim() || 'You';
-            localStorage.setItem('mindi_player_name', resolvedName);
+            CG.saveData('mindi_player_name', resolvedName);
             const finalPlayers = players.map((p, i) => i === 0 ? { ...p, name: resolvedName } : p);
             onStart({ playerCount, trumpMethod, gamePointsTarget, playerNames: finalPlayers.map(p => p.name), players: finalPlayers });
           }}

@@ -47,12 +47,12 @@ export function GameOver({ winnerTeam, finalScores, targetPoints, players, teamM
         </div>
 
         <h2 className="font-cinzel text-3xl text-center tracking-wider mb-1 text-gold">VICTORY!</h2>
-        <p className="text-center text-[10px] mb-5" style={{ color: 'rgba(255,255,255,0.2)' }}>Game Complete</p>
+        <p className="text-center text-xs mb-5" style={{ color: 'rgba(255,255,255,0.4)' }}>Game Complete</p>
 
         <div className="rounded-xl p-5 mb-4 text-center" style={{ background: 'rgba(212,168,67,0.04)', border: '1px solid rgba(212,168,67,0.12)' }}>
-          <div className="text-[9px] tracking-wider mb-1" style={{ color: 'rgba(255,255,255,0.2)' }}>CHAMPION</div>
+          <div className="text-xs tracking-wider mb-1" style={{ color: 'rgba(255,255,255,0.4)' }}>CHAMPION</div>
           <div className="font-cinzel text-2xl text-white tracking-wider mb-1">Team {winnerTeam === 0 ? 'A' : 'B'}</div>
-          <div className="text-sm" style={{ color: 'rgba(212,168,67,0.5)' }}>Reached {targetPoints} points</div>
+          <div className="text-sm" style={{ color: 'rgba(212,168,67,0.6)' }}>Reached {targetPoints} points</div>
         </div>
 
         {/* Team breakdown with player names and stats */}
@@ -68,19 +68,19 @@ export function GameOver({ winnerTeam, finalScores, targetPoints, players, teamM
                 boxShadow: isW ? `0 0 15px rgba(${c},0.06)` : 'none',
               }}>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-[8px] uppercase tracking-wider" style={{ color: `rgba(${c},0.6)` }}>Team {t === 0 ? 'A' : 'B'}</div>
+                  <div className="text-xs uppercase tracking-wider" style={{ color: `rgba(${c},0.7)` }}>Team {t === 0 ? 'A' : 'B'}</div>
                   <div className="font-cinzel text-lg text-white">{finalScores[t]}</div>
                 </div>
-                {isW && <div className="text-[9px] mb-2 text-gold">Winner</div>}
+                {isW && <div className="text-xs mb-2 text-gold font-semibold">Winner</div>}
                 <div className="space-y-1 mb-2">
                   {members.map((p, i) => (
-                    <div key={i} className="text-[10px] text-white truncate">{p.name}</div>
+                    <div key={i} className="text-xs text-white truncate">{p.name}</div>
                   ))}
                 </div>
                 <div className="pt-1.5" style={{ borderTop: `1px solid rgba(${c},0.1)` }}>
-                  <div className="flex justify-between text-[9px]" style={{ color: `rgba(${c},0.5)` }}>
-                    <span>Hath: {teamTricks[t]}</span>
-                    <span>Mindi: {teamMindis[t]}</span>
+                  <div className="flex justify-between text-xs" style={{ color: `rgba(${c},0.6)` }}>
+                    <span>Tricks: {teamTricks[t]}</span>
+                    <span>Mindis: {teamMindis[t]}</span>
                   </div>
                 </div>
               </div>

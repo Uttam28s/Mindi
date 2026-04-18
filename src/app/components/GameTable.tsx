@@ -108,10 +108,10 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
     const count = config.playerCount;
     if (count === 4) {
       const p: Record<number, { x: number; y: number }> = {
-        0: { x: 0,          y: pTH * 0.22  },   // bottom (local)
-        1: { x: pTW * 0.26, y: 0           },   // right
-        2: { x: 0,          y: -pTH * 0.22 },   // top
-        3: { x: -pTW * 0.26, y: 0          },   // left
+        0: { x: 0, y: pTH * 0.22 },   // bottom (local)
+        1: { x: pTW * 0.26, y: 0 },   // right
+        2: { x: 0, y: -pTH * 0.22 },   // top
+        3: { x: -pTW * 0.26, y: 0 },   // left
       };
       return p[relIdx] ?? { x: 0, y: 0 };
     }
@@ -326,32 +326,7 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
         </div>
       )}
 
-      {/* ── AI thinking ─────────────────────────────────────────────── */}
-      {!isMobilePortrait && !isMyTurn && !trickPause && aiPlayers?.has(round.currentTurnSeatIndex) && (
-        <div className="absolute top-28 left-1/2 -translate-x-1/2 z-30">
-          <div className="px-5 py-2 rounded-full flex items-center gap-2.5 animate-pulse"
-            style={{ background: 'rgba(20,6,6,0.88)', border: '1px solid rgba(212,168,67,0.2)', backdropFilter: 'blur(8px)' }}>
-            <span style={{ fontSize: 22 }}>{AVATARS[round.currentTurnSeatIndex]}</span>
-            <span style={{ fontSize: fs(14), color: 'rgba(212,168,67,0.75)' }}>
-              {gameState.players[round.currentTurnSeatIndex]?.name} thinking…
-            </span>
-          </div>
-        </div>
-      )}
 
-      {/* ══ PORTRAIT AI THINKING ═══════════════════════════════════ */}
-      {isMobilePortrait && !isMyTurn && !trickPause && aiPlayers?.has(round.currentTurnSeatIndex) && (
-        <div className="relative z-20 flex-shrink-0 flex items-center justify-center py-1.5"
-          style={{ background: 'rgba(0,0,0,0.3)' }}>
-          <div className="flex items-center gap-2 px-4 py-1 rounded-full animate-pulse"
-            style={{ background: 'rgba(20,6,6,0.88)', border: '1px solid rgba(212,168,67,0.2)' }}>
-            <span style={{ fontSize: 14 }}>{AVATARS[round.currentTurnSeatIndex]}</span>
-            <span style={{ fontSize: 11, color: 'rgba(212,168,67,0.75)' }}>
-              {gameState.players[round.currentTurnSeatIndex]?.name} thinking…
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* ══ PORTRAIT MIDDLE ════════════════════════════════════════ */}
       {isMobilePortrait && (
@@ -418,11 +393,11 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
                   else if (relIdx === 3) { bx = pBS - 4; by = pBS + pTH / 2; anchor = 'translate(-100%,-50%)'; isLR = true; isLeft = true; }
                 } else if (config.playerCount === 6) {
                   // top | right-upper | right-lower | left-upper | left-lower
-                  if      (relIdx === 3) { bx = pBS + pTW / 2;  by = 4;                  anchor = 'translate(-50%,0)';        }
-                  else if (relIdx === 2) { bx = pBS + pTW + 4;  by = pBS + pTH * 0.22;   anchor = 'translateY(-50%)';         isLR = true; }
-                  else if (relIdx === 1) { bx = pBS + pTW + 4;  by = pBS + pTH * 0.78;   anchor = 'translateY(-50%)';         isLR = true; }
-                  else if (relIdx === 4) { bx = pBS - 4;        by = pBS + pTH * 0.22;   anchor = 'translate(-100%,-50%)';    isLR = true; isLeft = true; }
-                  else if (relIdx === 5) { bx = pBS - 4;        by = pBS + pTH * 0.78;   anchor = 'translate(-100%,-50%)';    isLR = true; isLeft = true; }
+                  if (relIdx === 3) { bx = pBS + pTW / 2; by = 4; anchor = 'translate(-50%,0)'; }
+                  else if (relIdx === 2) { bx = pBS + pTW + 4; by = pBS + pTH * 0.22; anchor = 'translateY(-50%)'; isLR = true; }
+                  else if (relIdx === 1) { bx = pBS + pTW + 4; by = pBS + pTH * 0.78; anchor = 'translateY(-50%)'; isLR = true; }
+                  else if (relIdx === 4) { bx = pBS - 4; by = pBS + pTH * 0.22; anchor = 'translate(-100%,-50%)'; isLR = true; isLeft = true; }
+                  else if (relIdx === 5) { bx = pBS - 4; by = pBS + pTH * 0.78; anchor = 'translate(-100%,-50%)'; isLR = true; isLeft = true; }
                 } else {
                   // 8/10 players: circular formula, but snap top-center to just above the table
                   const topRelIdx = config.playerCount / 2; // relIdx with sin≈-1 (directly opposite)
@@ -656,33 +631,6 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
       */}
       <div className="relative z-20 flex-shrink-0"
         style={{ paddingBottom: isLandscape ? 12 : 20, paddingTop: 4, overflow: 'visible' }}>
-        {/* YOUR TURN banner */}
-        {isMyTurn && !aiPlayers?.has(myPlayerIndex) && (
-          <div className="flex justify-center mb-2">
-            <div className="px-6 py-1.5 rounded-full font-cinzel tracking-wider animate-bounce-subtle animate-border-glow-gold"
-              style={{ fontSize: 12, background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.45)', color: '#d4a843', boxShadow: '0 0 20px rgba(212,168,67,0.12)' }}>
-              YOUR TURN — Pick a card
-            </div>
-          </div>
-        )}
-
-        {/* Player identity row — landscape only */}
-        {!isMobilePortrait && (
-          <div className="flex items-center justify-center mb-2.5 px-4">
-            <div className="flex items-center gap-3 px-5 py-2 rounded-full"
-              style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(212,168,67,0.1)' }}>
-              <div className="rounded-full flex items-center justify-center flex-shrink-0 text-xl"
-                style={{ width: 36, height: 36, background: TEAM_COL[myPlayer.teamId].bg, border: `1.5px solid ${TEAM_COL[myPlayer.teamId].border}` }}>
-                {AVATARS[myPlayerIndex]}
-              </div>
-              <span className="text-white font-semibold" style={{ fontSize: fs(16) }}>{myPlayer.name}</span>
-              <span style={{ color: 'rgba(212,168,67,0.25)' }}>·</span>
-              <span style={{ fontSize: fs(14), color: myPlayer.teamId === 0 ? 'rgba(111,163,212,0.8)' : 'rgba(212,112,112,0.8)' }}>
-                Team {myPlayer.teamId === 0 ? 'A' : 'B'}
-              </span>
-            </div>
-          </div>
-        )}
 
         {/*
           Card fan — NO overflow clipping here.

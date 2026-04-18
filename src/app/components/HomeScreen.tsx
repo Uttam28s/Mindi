@@ -42,8 +42,8 @@ const LANG_CONTENT: Record<Lang, LangContent> = {
     ],
     scoring: [
       { label: 'Normal Win', pts: '1 pt', note: 'Team captures 3 or 4 Mindis' },
-      { label: 'Mendikot', pts: '3 pts', note: 'Team captures all 4 Mindis' },
-      { label: 'Whitewash', pts: '2 pts', note: 'Team wins all 15 tricks' },
+      { label: 'Mendikot', pts: '2 pts', note: 'Team captures all 4 Mindis' },
+      { label: 'Whitewash', pts: '3 pts', note: 'Team wins all 15 tricks' },
     ],
   },
   hi: {
@@ -60,8 +60,8 @@ const LANG_CONTENT: Record<Lang, LangContent> = {
     ],
     scoring: [
       { label: 'सामान्य जीत', pts: '1 pt', note: '3 या 4 मिंडी मिली हों' },
-      { label: 'मेंडीकोट', pts: '3 pts', note: 'सभी 4 मिंडी अपनी टीम को मिलें' },
-      { label: 'व्हाइटवाश', pts: '2 pts', note: 'सभी 15 चालें जीती हों' },
+      { label: 'मेंडीकोट', pts: '2 pts', note: 'सभी 4 मिंडी अपनी टीम को मिलें' },
+      { label: 'व्हाइटवाश', pts: '3 pts', note: 'सभी 15 चालें जीती हों' },
     ],
   },
   gu: {
@@ -78,8 +78,8 @@ const LANG_CONTENT: Record<Lang, LangContent> = {
     ],
     scoring: [
       { label: 'સામાન્ય જીત', pts: '1 pt', note: '3 અથવા 4 મીંડી મળી' },
-      { label: 'મેંડીકોટ', pts: '3 pts', note: 'ચારેય મીંડી ટીમ ને' },
-      { label: 'વ્હાઇટવોશ', pts: '2 pts', note: 'બધી 15 ચાલ જીતી' },
+      { label: 'મેંડીકોટ', pts: '2 pts', note: 'ચારેય મીંડી ટીમ ને' },
+      { label: 'વ્હાઇટવોશ', pts: '3 pts', note: 'બધી 15 ચાલ જીતી' },
     ],
   },
   mr: {
@@ -96,8 +96,8 @@ const LANG_CONTENT: Record<Lang, LangContent> = {
     ],
     scoring: [
       { label: 'सामान्य विजय', pts: '1 pt', note: '3 किंवा 4 मिंडी मिळाल्या' },
-      { label: 'मेंडीकोट', pts: '3 pts', note: 'सर्व 4 मिंडी संघाला मिळाल्या' },
-      { label: 'व्हाइटवॉश', pts: '2 pts', note: 'सर्व 15 डाव जिंकले' },
+      { label: 'मेंडीकोट', pts: '2 pts', note: 'सर्व 4 मिंडी संघाला मिळाल्या' },
+      { label: 'व्हाइटवॉश', pts: '3 pts', note: 'सर्व 15 डाव जिंकले' },
     ],
   },
   ta: {
@@ -114,8 +114,8 @@ const LANG_CONTENT: Record<Lang, LangContent> = {
     ],
     scoring: [
       { label: 'சாதாரண வெற்றி', pts: '1 pt', note: '3 அல்லது 4 மிண்டி பிடிக்கப்பட்டது' },
-      { label: 'மேண்டிகோட்', pts: '3 pts', note: 'நான்கு மிண்டியும் பிடிக்கப்பட்டது' },
-      { label: 'வைட்வாஷ்', pts: '2 pts', note: '15 சுற்றுகளும் வெல்லப்பட்டது' },
+      { label: 'மேண்டிகோட்', pts: '2 pts', note: 'நான்கு மிண்டியும் பிடிக்கப்பட்டது' },
+      { label: 'வைட்வாஷ்', pts: '3 pts', note: '15 சுற்றுகளும் வெல்லப்பட்டது' },
     ],
   },
 };
@@ -495,6 +495,8 @@ export function HomeScreen({ onCreateGame, onJoinGame, onQuickPlay }: HomeScreen
           <div className="text-[9px] tracking-widest" style={{ color: 'rgba(255,255,255,0.1)' }}>
             A ROYAL INDIAN CARD TRADITION
           </div>
+
+
         </div>
       </div>
 
