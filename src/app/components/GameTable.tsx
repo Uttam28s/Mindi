@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { GameState, TrickEntry, Suit, Card as CardType } from '../types';
 import { Card } from './Card';
 import { TrickArea } from './TrickArea';
+import { GameTour } from './GameTour';
+import { TourStep, TourHighlight, TourSeatHL, TourAreaHL } from '../utils/tourScript';
 import { TableBackground3D } from './TableBackground3D';
 import { Trophy, Target, Zap, ChevronUp, ChevronDown, Crown, Layers, Hash, Menu, X, Home, RotateCcw } from 'lucide-react';
 import { Sounds } from '../utils/sounds';
@@ -22,6 +24,11 @@ interface GameTableProps {
   aiPlayers?: Set<number>;
   trickPause?: TrickPauseData | null;
   onExitGame?: () => void;
+  tourStep?: TourStep;
+  tourStepIndex?: number;
+  tourTotalSteps?: number;
+  onTourNext?: () => void;
+  onTourSkip?: () => void;
 }
 
 const suitSymbols: Record<string, string> = { hearts: '♥', diamonds: '♦', spades: '♠', clubs: '♣' };
@@ -38,8 +45,34 @@ function getPlayableCardIds(hand: { id: string; suit: Suit }[], ledSuit: Suit | 
   return new Set((same.length > 0 ? same : hand).map(c => c.id));
 }
 
-export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, trickPause, onExitGame }: GameTableProps) {
+export function GameTable({
+  gameState, myPlayerIndex, onCardClick, aiPlayers, trickPause, onExitGame,
+  tourStep, tourStepIndex, tourTotalSteps, onTourNext, onTourSkip,
+}: GameTableProps) {
   const myPlayer = gameState.players[myPlayerIndex];
+
+  const isTourMode = !!tourStep;
+
+  const tourHighlightedCardIds = useMemo<Set<string>>(() => {
+    if (!tourStep) return new Set();
+    return new Set(
+      tourStep.highlights
+        .filter((h): h is TourHighlight => h.type === 'card')
+        .map(h => h.cardId)
+    );
+  }, [tourStep]);
+
+  const tourHighlightedAreaId = useMemo<string | null>(() => {
+    if (!tourStep) return null;
+    const a = tourStep.highlights.find(h => h.type === 'area') as TourAreaHL | undefined;
+    return a?.areaId ?? null;
+  }, [tourStep]);
+
+  const tourHighlightedSeatIndex = useMemo<number | null>(() => {
+    if (!tourStep) return null;
+    const s = tourStep.highlights.find(h => h.type === 'seat') as TourSeatHL | undefined;
+    return s?.seatIndex ?? null;
+  }, [tourStep]);
   const { round, config } = gameState;
   const isMyTurn = round.currentTurnSeatIndex === myPlayerIndex && !trickPause;
 
@@ -162,7 +195,9 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
   }, [round.completedTricks, gameState.players]);
 
   const handleCardClick = (cardId: string) => {
-    if (playableIds.has(cardId)) onCardClick?.(cardId);
+    if (isTourMode) {
+      if (tourHighlightedCardIds.has(cardId)) onCardClick?.(cardId);
+    } else if (playableIds.has(cardId)) onCardClick?.(cardId);
   };
 
   const barPy = isLandscape ? 6 : isMobilePortrait ? 6 : 11;
@@ -186,13 +221,17 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
 
           {/* Trump indicator */}
           {round.trumpSuit ? (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full"
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full relative"
               style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.2)' }}>
               <Zap style={{ width: fs(14), height: fs(14), color: '#d4a843' }} />
               {!isMobilePortrait && <span style={{ fontSize: fs(13), color: 'rgba(255,255,255,0.55)' }}>Trump</span>}
               <span style={{ fontSize: fs(24), lineHeight: 1, color: suitCols[round.trumpSuit] }}>
                 {suitSymbols[round.trumpSuit]}
               </span>
+              {tourHighlightedAreaId === 'trump_indicator' && (
+                <div className="absolute inset-[-3px] rounded-full pointer-events-none"
+                  style={{ border: '2px solid #d4a843', animation: 'goldPulse 1.2s ease-in-out infinite', zIndex: 400 }} />
+              )}
             </div>
           ) : config.trumpMethod === 'cut_hukum' ? (
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full animate-pulse"
@@ -642,20 +681,33 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
           <div className="relative" style={{ width: totalHandWidth, height: handHeight, overflow: 'visible' }}>
             {sortedHand.map((card: CardType, index: number) => {
               const isPlayable = playableIds.has(card.id);
+              const isTourHL = isTourMode && tourHighlightedCardIds.has(card.id);
+              // Only truly "playable" in tour if this specific card must be played this step
+              const isTourPlayable = isTourHL &&
+                tourStep?.requiredAction.type === 'play_card' &&
+                tourStep.requiredAction.cardId === card.id;
+              const effectivePlayable = isTourMode ? isTourPlayable : isPlayable;
+              const dimForTour = isTourMode && !isTourHL;
               return (
-                <div key={card.id} className="absolute transition-all duration-200"
+                <div key={card.id}
+                  className="absolute transition-all duration-200"
                   style={{
                     left: handPadX + index * overlap,
                     bottom: 10,
-                    zIndex: index,
+                    zIndex: isTourHL ? 250 : index,
+                    opacity: dimForTour ? 0.28 : 1,
+                    filter: dimForTour ? 'saturate(0.4)' : undefined,
                   }}>
                   <Card
                     card={card}
                     faceUp
-                    playable={isPlayable}
+                    playable={effectivePlayable}
                     onClick={() => handleCardClick(card.id)}
                     size={cardSz}
-                    glowColor={isPlayable ? 'rgba(212,168,67,0.25)' : undefined}
+                    glowColor={
+                      isTourHL ? 'rgba(212,168,67,0.55)' :
+                      isPlayable ? 'rgba(212,168,67,0.25)' : undefined
+                    }
                     dealDelay={dealing ? index * 40 : undefined}
                   />
                 </div>
@@ -723,6 +775,21 @@ export function GameTable({ gameState, myPlayerIndex, onCardClick, aiPlayers, tr
             </button>
           </div>
         </div>
+      )}
+
+      {/* ══ TOUR OVERLAY ════════════════════════════════════════════ */}
+      {isTourMode && tourStep && (
+        <GameTour
+          step={tourStep}
+          stepIndex={tourStepIndex ?? 0}
+          totalSteps={tourTotalSteps ?? 1}
+          onNext={onTourNext ?? (() => {})}
+          onSkip={onTourSkip ?? (() => {})}
+          highlightedCardIds={tourHighlightedCardIds}
+          highlightedAreaId={tourHighlightedAreaId}
+          highlightedSeatIndex={tourHighlightedSeatIndex}
+          canAdvance={tourStep.requiredAction.type === 'click_next'}
+        />
       )}
     </div>
   );

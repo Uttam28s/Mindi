@@ -12,6 +12,7 @@ import { GameState, Card, Player, Suit, Rank, CompletedTrick } from './types';
 import { AIPlayer } from './utils/aiPlayer';
 import { connectSocket, disconnectSocket, getSocket } from './utils/socket';
 import { CG } from './utils/crazygames';
+import { buildTourScenario, TourScenario } from './utils/tourScript';
 
 type Screen = 'home' | 'setup' | 'join' | 'lobby' | 'loading' | 'team_reveal' | 'game' | 'round_result' | 'game_over';
 
@@ -185,6 +186,84 @@ function buildGameState(
   };
 }
 
+// ─── Tour: pure trick-resolution for scripted game state ───────
+// Mirrors playCard logic but operates on a provided snapshot (no side effects).
+
+function applyTourCardPlay(state: GameState, seatIndex: number, cardId: string): GameState {
+  const player = state.players[seatIndex];
+  const card = player.hand.find(c => c.id === cardId);
+  if (!card) {
+    console.warn('[Tour] Card not found:', cardId, 'for seat', seatIndex);
+    return state;
+  }
+
+  const newPlayers = state.players.map((p, i) => {
+    if (i !== seatIndex) return p;
+    const newHand = p.hand.filter(c => c.id !== cardId);
+    return { ...p, hand: newHand, cardCount: newHand.length };
+  });
+
+  const newTrickCards = [...state.round.currentTrick.cards, { seatIndex, card }];
+  const newLedSuit = state.round.currentTrick.ledSuit || card.suit;
+
+  if (newTrickCards.length === state.config.playerCount) {
+    let winIdx = 0;
+    let winCard = newTrickCards[0].card;
+    const ledSuit = newTrickCards[0].card.suit;
+    const trumpSuit = state.round.trumpSuit;
+
+    for (let i = 1; i < newTrickCards.length; i++) {
+      const c = newTrickCards[i].card;
+      let beats = false;
+      if (trumpSuit && c.suit === trumpSuit && winCard.suit !== trumpSuit) {
+        beats = true;
+      } else if (trumpSuit && winCard.suit === trumpSuit && c.suit !== trumpSuit) {
+        beats = false;
+      } else if (c.suit === winCard.suit) {
+        beats = getRankValue(c.rank) >= getRankValue(winCard.rank);
+      } else if (c.suit === ledSuit && winCard.suit !== ledSuit) {
+        beats = true;
+      }
+      if (beats) { winCard = c; winIdx = i; }
+    }
+
+    const winningSeat = newTrickCards[winIdx].seatIndex;
+    const winTeam = newPlayers[winningSeat].teamId;
+    const mindisInTrick = newTrickCards.filter(e => e.card.rank === '10').length;
+
+    const newTeamMindis: [number, number] = [...state.round.teamMindis] as [number, number];
+    const newTeamTricks: [number, number] = [...state.round.teamTricks] as [number, number];
+    newTeamMindis[winTeam] += mindisInTrick;
+    newTeamTricks[winTeam] += 1;
+
+    return {
+      ...state,
+      players: newPlayers,
+      round: {
+        ...state.round,
+        currentTrick: { cards: [], ledSuit: null },
+        completedTricks: [...state.round.completedTricks, { cards: newTrickCards, winnerSeatIndex: winningSeat, mindisInTrick }],
+        teamMindis: newTeamMindis,
+        teamTricks: newTeamTricks,
+        currentLeaderSeatIndex: winningSeat,
+        currentTurnSeatIndex: winningSeat,
+        trickNumber: state.round.trickNumber + 1,
+      },
+    };
+  }
+
+  const nextTurn = nextSeatAnticlockwise(seatIndex, state.config.playerCount);
+  return {
+    ...state,
+    players: newPlayers,
+    round: {
+      ...state.round,
+      currentTrick: { cards: newTrickCards, ledSuit: newLedSuit },
+      currentTurnSeatIndex: nextTurn,
+    },
+  };
+}
+
 // ─── Room Code ─────────────────────────────────────────────────
 
 const generateRoomCode = () => {
@@ -232,6 +311,13 @@ export default function App() {
   const localTeamIdsRef = useRef<(0 | 1)[] | null>(null);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Tour state ──────────────────────────────────────────────────
+  const [isTourActive, setIsTourActive] = useState(false);
+  const [tourGameState, setTourGameState] = useState<GameState | null>(null);
+  const [tourScenario, setTourScenario] = useState<TourScenario | null>(null);
+  const [tourStepIndex, setTourStepIndex] = useState(0);
+  const tourAiTimeoutRef = useRef<ReturnType<typeof setTimeout>[]>([]);
+
   // ── CrazyGames SDK: gameplay lifecycle signals ────────────────
   // gameplayStart = player is actively playing cards
   // gameplayStop  = any non-gameplay screen (menus, loading, results)
@@ -253,10 +339,35 @@ export default function App() {
   useEffect(() => {
     const initCG = async () => {
       // 1. Resolve player name: prefer CrazyGames account username
-      const cgUser = await CG.getUser();
+      // Race against a 3-second timeout so localhost (where the CG SDK can hang
+      // waiting for a server response) doesn't block the tour and game startup.
+      const cgUser = await Promise.race([
+        CG.getUser(),
+        new Promise<null>(resolve => setTimeout(() => resolve(null), 3000)),
+      ]);
       const playerName = cgUser?.username || CG.loadData('mindi_player_name') || 'Player';
       if (cgUser?.username) {
         CG.saveData('mindi_player_name', cgUser.username);
+      }
+
+      // ── First-time tour detection ──────────────────────────────
+      const tourCompleted = CG.loadData('tour_completed');
+      const hasInvite = !!CG.getInviteParam('roomName');
+      const isInstant = CG.isInstantMultiplayer();
+      const forceTour = import.meta.env.DEV && new URLSearchParams(window.location.search).has('tour');
+      if (import.meta.env.DEV) {
+        console.log('[Tour] tourCompleted:', tourCompleted, '| hasInvite:', hasInvite, '| isInstant:', isInstant, '| forceTour:', forceTour);
+      }
+      if (forceTour || (!tourCompleted && !hasInvite && !isInstant)) {
+        setTimeout(() => {
+          const scenario = buildTourScenario(playerName);
+          setTourScenario(scenario);
+          setTourGameState(scenario.initialGameState);
+          setTourStepIndex(0);
+          setIsTourActive(true);
+          setScreen('game');
+        }, 400);
+        return;
       }
 
       // Helper: connect socket and auto-join a room
@@ -672,9 +783,83 @@ export default function App() {
     });
   }, []);
 
+  // ─── Tour handlers ────────────────────────────────────────────
+
+  const completeTour = useCallback(() => {
+    CG.saveData('tour_completed', 'true');
+    tourAiTimeoutRef.current.forEach(clearTimeout);
+    tourAiTimeoutRef.current = [];
+    setIsTourActive(false);
+    setTourGameState(null);
+    setTourScenario(null);
+    setTourStepIndex(0);
+    setScreen('home');
+  }, []);
+
+  const skipTour = useCallback(() => {
+    completeTour();
+  }, [completeTour]);
+
+  const handleTourAction = useCallback((playedCardId?: string) => {
+    setTourScenario(prevScenario => {
+      if (!prevScenario) return prevScenario;
+      setTourStepIndex(prevIdx => {
+        const currentStep = prevScenario.steps[prevIdx];
+
+        if (currentStep.requiredAction.type === 'play_card') {
+          if (playedCardId !== currentStep.requiredAction.cardId) return prevIdx;
+          setTourGameState(prev => prev ? applyTourCardPlay(prev, 0, playedCardId) : prev);
+        }
+
+        const aiScript = prevScenario.aiPlayScripts.find(s => s.stepId === currentStep.id);
+        if (aiScript) {
+          const handles = aiScript.plays.map(({ seatIndex, cardId, delayMs }) =>
+            setTimeout(() => {
+              setTourGameState(prev => prev ? applyTourCardPlay(prev, seatIndex, cardId) : prev);
+            }, delayMs)
+          );
+          tourAiTimeoutRef.current.push(...handles);
+        }
+
+        const lastDelay = aiScript ? Math.max(...aiScript.plays.map(p => p.delayMs)) + 700 : 200;
+        const nextIdx = prevIdx + 1;
+
+        const advanceHandle = setTimeout(() => {
+          if (nextIdx >= prevScenario.steps.length) {
+            completeTour();
+            return;
+          }
+          setTourStepIndex(nextIdx);
+
+          const nextStep = prevScenario.steps[nextIdx];
+          if (nextStep.aiPlaysBeforeStep) {
+            nextStep.aiPlaysBeforeStep.forEach(({ seatIndex, cardId }, i) => {
+              const h = setTimeout(() => {
+                setTourGameState(prev => prev ? applyTourCardPlay(prev, seatIndex, cardId) : prev);
+              }, i * 750);
+              tourAiTimeoutRef.current.push(h);
+            });
+          }
+        }, lastDelay);
+        tourAiTimeoutRef.current.push(advanceHandle);
+
+        return prevIdx;
+      });
+      return prevScenario;
+    });
+  }, [completeTour]);
+
+  const handleTourCardClick = useCallback((cardId: string) => {
+    if (!isTourActive || !tourScenario) return;
+    const currentStep = tourScenario.steps[tourStepIndex];
+    if (currentStep.requiredAction.type !== 'play_card') return;
+    handleTourAction(cardId);
+  }, [isTourActive, tourScenario, tourStepIndex, handleTourAction]);
+
   // ─── AI auto-play ────────────────────────────────────────────
 
   useEffect(() => {
+    if (isTourActive) return; // tour manages its own AI via aiPlayScripts
     if (!gameState || screen !== 'game') return;
     if (trickPause) return;
 
@@ -729,7 +914,7 @@ export default function App() {
     return () => {
       if (aiTimeoutRef.current) clearTimeout(aiTimeoutRef.current);
     };
-  }, [gameState, screen, playerConfigs, aiPlayersMap, playCard, trickPause, isOnlineMode, isHost, roomCode]);
+  }, [gameState, screen, playerConfigs, aiPlayersMap, playCard, trickPause, isOnlineMode, isHost, roomCode, isTourActive]);
 
   // ─── Setup helpers ───────────────────────────────────────────
 
@@ -1050,15 +1235,33 @@ export default function App() {
         />
       )}
 
-      {screen === 'game' && gameState && (
-        <GameTable
-          gameState={gameState}
-          myPlayerIndex={isOnlineMode ? mySeatIndex : (playerConfigs.findIndex((p: PlayerConfig) => !p.isAI) ?? 0)}
-          onCardClick={handleCardClick}
-          aiPlayers={isOnlineMode ? new Set<number>() : new Set(aiPlayersMap.keys())}
-          trickPause={trickPause}
-          onExitGame={handleBack}
-        />
+      {screen === 'game' && (
+        isTourActive && tourGameState && tourScenario ? (
+          <GameTable
+            gameState={tourGameState}
+            myPlayerIndex={0}
+            onCardClick={handleTourCardClick}
+            aiPlayers={new Set([1, 2, 3])}
+            trickPause={null}
+            onExitGame={skipTour}
+            tourStep={tourScenario.steps[tourStepIndex]}
+            tourStepIndex={tourStepIndex}
+            tourTotalSteps={tourScenario.steps.length}
+            onTourNext={handleTourAction}
+            onTourSkip={skipTour}
+          />
+        ) : (
+          gameState && (
+            <GameTable
+              gameState={gameState}
+              myPlayerIndex={isOnlineMode ? mySeatIndex : (playerConfigs.findIndex((p: PlayerConfig) => !p.isAI) ?? 0)}
+              onCardClick={handleCardClick}
+              aiPlayers={isOnlineMode ? new Set<number>() : new Set(aiPlayersMap.keys())}
+              trickPause={trickPause}
+              onExitGame={handleBack}
+            />
+          )
+        )
       )}
 
       {screen === 'round_result' && gameState && roundWinner && (

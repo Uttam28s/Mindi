@@ -29,7 +29,8 @@
       "WebFetch(domain:developer.crazygames.com)",
       "Bash(xargs cat:*)",
       "Bash(grep -n \"isSoloAI\\\\|togglePlayerType\\\\|isAI\" /c/Users/Uttam/Desktop/Projects/Games/Mindi/src/app/components/*.tsx)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(python -c ' *)"
     ]
   }
 }

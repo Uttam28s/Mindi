@@ -238,7 +238,9 @@ export const CG = {
 
   async getUser(): Promise<CGUser | null> {
     const s = sdk();
-    if (!s || !s.user.isUserAccountAvailable()) return null;
+    if (!s) return null;
+    // isUserAccountAvailable was removed in SDK v3.8 — guard defensively
+    if (typeof s.user.isUserAccountAvailable === 'function' && !s.user.isUserAccountAvailable()) return null;
     try { return await s.user.getUser(); } catch { return null; }
   },
 

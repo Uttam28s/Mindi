@@ -24,6 +24,19 @@
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
 }
+@keyframes tourHighlightPulse {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(212,168,67,0.55), 0 0 8px rgba(212,168,67,0.35); }
+  50%       { box-shadow: 0 0 0 2px rgba(212,168,67,0.95), 0 0 14px rgba(212,168,67,0.55); }
+}
+@keyframes tourFadeIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@keyframes goldPulse {
+  0%, 100% { opacity: 0.65; }
+  50%       { opacity: 1; }
+}
+/* .tour-highlight-card — deprecated; cards now highlighted via opacity-dim on peers */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }

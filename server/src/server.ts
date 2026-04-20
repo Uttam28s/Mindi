@@ -21,6 +21,8 @@ function isAllowedOrigin(origin: string | undefined): boolean {
   if (!origin) return true; // same-origin / non-browser requests
   if (rawOrigins.includes(origin)) return true;
   if (/^https?:\/\/([a-z0-9-]+\.)*crazygames\.com$/.test(origin)) return true;
+  if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return true;
+  if (/^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return true;
   return false;
 }
 
