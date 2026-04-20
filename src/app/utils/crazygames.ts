@@ -96,11 +96,25 @@ declare global {
 
 /* ── Detect whether the SDK is available ─────────────────────────── */
 
-function sdk() {
+let _initialized = false;
+
+/**
+ * Raw SDK accessor — used ONLY inside init().
+ * Returns the SDK object regardless of init status.
+ */
+function rawSdk() {
   return window.CrazyGames?.SDK ?? null;
 }
 
-let _initialized = false;
+/**
+ * Guarded SDK accessor — used by all other helpers.
+ * Returns null until init() has completed successfully,
+ * so disabled-SDK errors on non-CrazyGames domains never bubble up.
+ */
+function sdk() {
+  if (!_initialized) return null;
+  return window.CrazyGames?.SDK ?? null;
+}
 
 /* ── Public CG helper ─────────────────────────────────────────────── */
 
@@ -108,7 +122,7 @@ export const CG = {
   /** Initialize the SDK. Must be awaited before calling any other method. */
   async init(): Promise<void> {
     if (_initialized) return;
-    const s = sdk();
+    const s = rawSdk();
     if (!s) return;
     try {
       await s.init();
