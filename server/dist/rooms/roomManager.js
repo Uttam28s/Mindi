@@ -8,6 +8,7 @@ exports.getRoomBySocket = getRoomBySocket;
 exports.getLobbyPlayers = getLobbyPlayers;
 exports.startGame = startGame;
 exports.startNextRound = startNextRound;
+exports.renamePlayer = renamePlayer;
 exports.cleanupStaleRooms = cleanupStaleRooms;
 const gameEngine_1 = require("../engine/gameEngine");
 const rooms = new Map();
@@ -19,10 +20,25 @@ function generateCode() {
     return rooms.has(code) ? generateCode() : code;
 }
 /** Create a new lobby room. Returns the room code. */
-function createRoom(hostSocketId, hostName, playerCount, trumpMethod, gamePointsTarget) {
+function createRoom(hostSocketId, hostName, playerCount, trumpMethod, gamePointsTarget, aiSlots) {
     const code = generateCode();
     const seats = Array(playerCount).fill(null);
     seats[0] = { socketId: hostSocketId, name: hostName, seatIndex: 0, teamId: 0 };
+    // Pre-fill AI seats with placeholder socket IDs
+    if (aiSlots) {
+        for (const ai of aiSlots) {
+            if (ai.seatIndex > 0 && ai.seatIndex < playerCount) {
+                seats[ai.seatIndex] = {
+                    socketId: `ai_seat_${ai.seatIndex}`,
+                    name: ai.name,
+                    seatIndex: ai.seatIndex,
+                    teamId: (ai.seatIndex % 2),
+                    isAI: true,
+                    aiDifficulty: ai.difficulty,
+                };
+            }
+        }
+    }
     const room = {
         code,
         hostSocketId,
@@ -44,6 +60,7 @@ function joinRoom(socketId, name, code) {
         return { error: 'Room not found' };
     if (room.phase !== 'lobby')
         return { error: 'Game already started' };
+    // Find next empty human seat (skip AI pre-filled slots)
     const nextSeat = room.seats.findIndex(s => s === null);
     if (nextSeat === -1)
         return { error: 'Room is full' };
@@ -84,7 +101,14 @@ function getRoomBySocket(socketId) {
 function getLobbyPlayers(room) {
     return room.seats
         .filter((s) => s !== null)
-        .map(s => ({ name: s.name, seatIndex: s.seatIndex, teamId: s.teamId, connected: true }));
+        .map(s => ({
+        name: s.name,
+        seatIndex: s.seatIndex,
+        teamId: s.teamId,
+        connected: true,
+        isAI: s.isAI,
+        aiDifficulty: s.aiDifficulty,
+    }));
 }
 /** Start the game. Fails if not all seats filled or already started. */
 function startGame(room) {
@@ -92,12 +116,36 @@ function startGame(room) {
         return { error: 'Already started' };
     if (room.seats.some(s => s === null))
         return { error: 'Not all players joined' };
+    // Randomly shuffle PLAYERS among seats, then assign alternating teams.
+    // This guarantees no two same-team players ever sit adjacent (Mindi rule).
+    const allSeats = room.seats;
+    const shuffled = [...allSeats];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    const half = room.playerCount / 2;
+    const newSeats = Array(room.playerCount).fill(null);
+    const teamIds = Array(room.playerCount).fill(0);
+    // First half → even seats (Team 0); second half → odd seats (Team 1)
+    for (let k = 0; k < half; k++) {
+        const evenIdx = k * 2;
+        newSeats[evenIdx] = { ...shuffled[k], seatIndex: evenIdx, teamId: 0 };
+        teamIds[evenIdx] = 0;
+    }
+    for (let k = 0; k < half; k++) {
+        const oddIdx = k * 2 + 1;
+        newSeats[oddIdx] = { ...shuffled[half + k], seatIndex: oddIdx, teamId: 1 };
+        teamIds[oddIdx] = 1;
+    }
+    room.seats = newSeats;
+    room.teamIds = teamIds; // always [0,1,0,1,...] — preserved for subsequent rounds
     const seats = room.seats;
     const state = (0, gameEngine_1.initGame)(room.code, seats.map(s => s.name), seats.map(s => s.socketId), {
         playerCount: room.playerCount,
         trumpMethod: room.trumpMethod,
         gamePointsTarget: room.gamePointsTarget
-    });
+    }, 0, [0, 0], teamIds);
     room.gameState = state;
     room.phase = 'playing';
     return state;
@@ -115,10 +163,26 @@ function startNextRound(room, winnerTeamId, category) {
         playerCount: room.playerCount,
         trumpMethod: room.trumpMethod,
         gamePointsTarget: room.gamePointsTarget
-    }, newDealer, [...prev.gamePoints]);
+    }, newDealer, [...prev.gamePoints], room.teamIds);
     room.gameState = newState;
     room.phase = 'playing';
     return newState;
+}
+/** Rename a player in the lobby. Only allowed before game starts. */
+function renamePlayer(socketId, code, newName) {
+    const room = rooms.get(code.toUpperCase());
+    if (!room)
+        return { error: 'Room not found' };
+    if (room.phase !== 'lobby')
+        return { error: 'Game already started' };
+    const idx = room.seats.findIndex(s => s?.socketId === socketId);
+    if (idx === -1)
+        return { error: 'Not in room' };
+    const trimmed = newName.trim().slice(0, 20);
+    if (!trimmed)
+        return { error: 'Name cannot be empty' };
+    room.seats[idx].name = trimmed;
+    return { room, seatIndex: idx };
 }
 /** Expire rooms older than 30 minutes with no active game (PRD §14.3). */
 function cleanupStaleRooms() {

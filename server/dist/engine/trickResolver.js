@@ -26,8 +26,9 @@ function cardBeats(a, b, ledSuit, trumpSuit) {
     if (!aIsTrump && bIsTrump)
         return false;
     // Both trump or both non-trump
+    // PRD: if same card played, last player's card wins (>= so later card beats earlier on tie)
     if (a.suit === b.suit)
-        return getRankValue(a.rank) > getRankValue(b.rank);
+        return getRankValue(a.rank) >= getRankValue(b.rank);
     // Different suits, neither is trump: only led-suit card can win
     if (a.suit === ledSuit && b.suit !== ledSuit)
         return true;

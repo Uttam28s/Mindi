@@ -20,7 +20,7 @@ function mindiMajority(playerCount) {
     return { 4: 5, 6: 7, 8: 9, 10: 11 }[playerCount];
 }
 // ── Init ────────────────────────────────────────────────────────────
-function initGame(roomCode, playerNames, socketIds, config, dealerSeat = 0, preservedGamePoints = [0, 0]) {
+function initGame(roomCode, playerNames, socketIds, config, dealerSeat = 0, preservedGamePoints = [0, 0], teamIds) {
     const pc = config.playerCount;
     const { hands, fillerCards } = (0, deckBuilder_1.buildAndDeal)(pc);
     const isCutHukum = config.trumpMethod === 'cut_hukum';
@@ -33,7 +33,7 @@ function initGame(roomCode, playerNames, socketIds, config, dealerSeat = 0, pres
         id: socketIds[i] ?? `bot_${i}`,
         name,
         seatIndex: i,
-        teamId: (i % 2),
+        teamId: teamIds ? teamIds[i] : (i % 2),
         hand: hands[i],
         cardCount: hands[i].length
     }));

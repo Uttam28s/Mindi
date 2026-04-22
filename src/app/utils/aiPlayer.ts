@@ -2,7 +2,17 @@ import { Card, GameState, Suit, TrickEntry } from '../types';
 
 /**
  * AI Player Engine for Mindi Card Game
- * Implements aggressive card-playing strategies
+ *
+ * Human-like strategy goals:
+ *  1. Mindi (rank '10') is precious — never play it unless forced or you are the
+ *     LAST player and the trick is already safe for your team.
+ *  2. Void engineering — lead suits where a teammate is already void so they can
+ *     trump; avoid leading suits where an opponent is void (they'll trump you).
+ *  3. Teammate support — when a teammate leads with a low card (signalling they
+ *     want to burn a suit and void themselves), try to win the trick so your team
+ *     keeps the lead; on your next lead, repeat that suit to accelerate the void.
+ *  4. Trump discipline — use trump cards only when you cannot win otherwise or
+ *     when a mindi is at stake.
  */
 
 export class AIPlayer {
@@ -12,9 +22,8 @@ export class AIPlayer {
     this.difficulty = difficulty;
   }
 
-  /**
-   * Main method: AI decides which card to play
-   */
+  // ─── Public entry point ───────────────────────────────────────────────────
+
   selectCard(hand: Card[], gameState: GameState, playerIndex: number): Card {
     const { round } = gameState;
     const { currentTrick } = round;
@@ -43,16 +52,21 @@ export class AIPlayer {
     return sameSuit.length > 0 ? sameSuit : hand;
   }
 
-  // ─── Easy strategy (unchanged) ────────────────────────────────────────────
+  // ─── Easy strategy ────────────────────────────────────────────────────────
 
   private playEasyStrategy(playableCards: Card[], _gameState: GameState): Card {
+    // Easy still avoids leading mindi
     if (Math.random() < 0.7) {
-      return playableCards[Math.floor(Math.random() * playableCards.length)];
+      const nonMindi = playableCards.filter(c => c.rank !== '10');
+      const pool = nonMindi.length > 0 ? nonMindi : playableCards;
+      return pool[Math.floor(Math.random() * pool.length)];
     }
-    return this.getLowestCard(playableCards);
+    return this.getLowestCard(playableCards.filter(c => c.rank !== '10').length > 0
+      ? playableCards.filter(c => c.rank !== '10')
+      : playableCards);
   }
 
-  // ─── Medium strategy (enhanced) ──────────────────────────────────────────
+  // ─── Medium strategy ──────────────────────────────────────────────────────
 
   private playMediumStrategy(
     playableCards: Card[],
@@ -72,42 +86,73 @@ export class AIPlayer {
     const mindiMajority = gameState.config.mindiMajority;
     const safeAhead = myMindis >= mindiMajority;
     const oppThreatening = oppMindis >= mindiMajority - 1;
+    const voidMap = this.buildVoidedSuits(gameState);
 
     // ── Leading ──
     if (isLeading) {
-      if (safeAhead) return this.getHighestNonFillerCard(playableCards);
-      return this.getMiddleCard(playableCards);
+      // Never lead with mindi unless that's literally all we have
+      const nonMindiCards = playableCards.filter(c => c.rank !== '10');
+      const leadPool = nonMindiCards.length > 0 ? nonMindiCards : playableCards;
+
+      // Lead a suit where a teammate is void → they can trump it
+      const voidExploit = this.getVoidExploitLead(leadPool, gameState, playerIndex, voidMap, trumpSuit);
+      if (voidExploit) return voidExploit;
+
+      if (safeAhead) return this.getHighestNonMindiCard(leadPool);
+      return this.getMiddleCard(leadPool);
     }
 
-    // ── Mindi in trick: maximum priority ──
+    // ── Mindi in trick: fight for it ──
     if (trickHasMindi) {
       if (teammateWinning) {
-        const mindi = playableCards.find(c => c.rank === '10');
-        if (mindi) return mindi;
-        return this.getLowestNonFillerCard(playableCards);
+        // Only gift our mindi if we're the last player and it's totally safe
+        if (isLastPlayer) {
+          const mindi = playableCards.find(c => c.rank === '10');
+          if (mindi) return mindi;
+        }
+        return this.getLowestNonMindiCard(playableCards);
       }
-      // Opponent winning or unknown — fight for it
+      // Opponent winning — fight for it
       if (minWinCard) return minWinCard;
-      // Try trump
+      // Try trump if we're void in led suit
       if (trumpSuit && currentTrick.ledSuit !== trumpSuit) {
         const trumpCards = playableCards.filter(c => c.suit === trumpSuit);
         if (trumpCards.length > 0) return this.getLowestCard(trumpCards);
       }
-      return this.getLowestNonFillerCard(playableCards);
+      return this.getLowestNonMindiCard(playableCards);
     }
 
-    // ── Last player optimization ──
+    // ── Teammate leading low → try to win trick to take over the lead ──
+    const leaderSeat = currentTrick.cards[0]?.seatIndex;
+    const leaderTeam = leaderSeat !== undefined ? gameState.players[leaderSeat]?.teamId : -1;
+    const isTeammateLead = leaderTeam === myTeam;
+    const leaderCard = currentTrick.cards[0]?.card;
+    if (
+      isTeammateLead &&
+      leaderCard &&
+      (leaderCard.isFiller || this.getRankValue(leaderCard.rank) <= this.getRankValue('8'))
+    ) {
+      // Teammate signalling a low card — win cheaply to maintain team lead
+      if (minWinCard && this.getRankValue(minWinCard.rank) <= this.getRankValue('Q')) {
+        return minWinCard;
+      }
+      // Can't win cheaply — discard
+      return this.getLowestNonMindiCard(playableCards);
+    }
+
+    // ── Last player optimisation ──
     if (isLastPlayer) {
       if (teammateWinning) {
+        // Only gift mindi when we're last and trick is safe
         const mindi = playableCards.find(c => c.rank === '10');
         if (mindi) return mindi;
-        return this.getLowestNonFillerCard(playableCards);
+        return this.getLowestNonMindiCard(playableCards);
       }
       if (minWinCard) return minWinCard;
-      return this.getLowestNonFillerCard(playableCards);
+      return this.getLowestNonMindiCard(playableCards);
     }
 
-    // ── Cut_hukum: void in led suit → pick best trump-establishing card ──
+    // ── cut_hukum: void in led suit → pick best trump-establishing card ──
     if (
       gameState.config.trumpMethod === 'cut_hukum' &&
       !trumpSuit &&
@@ -117,11 +162,9 @@ export class AIPlayer {
       return this.pickTrumpEstablishCard(playableCards, fullHand);
     }
 
-    // ── Teammate winning → gift Mindi or discard ──
+    // ── Teammate winning → discard cheap (no free mindi giveaway) ──
     if (teammateWinning) {
-      const mindi = playableCards.find(c => c.rank === '10');
-      if (mindi) return mindi;
-      return this.getLowestNonFillerCard(playableCards);
+      return this.getLowestNonMindiCard(playableCards);
     }
 
     // ── Try to win cheaply if worth it ──
@@ -130,10 +173,10 @@ export class AIPlayer {
       if (oppThreatening || winVal <= this.getRankValue('J')) return minWinCard;
     }
 
-    return this.getLowestNonFillerCard(playableCards);
+    return this.getLowestNonMindiCard(playableCards);
   }
 
-  // ─── Hard strategy (rewritten — aggressive) ───────────────────────────────
+  // ─── Hard strategy ────────────────────────────────────────────────────────
 
   private playHardStrategy(
     playableCards: Card[],
@@ -144,7 +187,6 @@ export class AIPlayer {
     const { round } = gameState;
     const { currentTrick } = round;
     const isLeading = currentTrick.cards.length === 0;
-
     const voidMap = this.buildVoidedSuits(gameState);
 
     if (isLeading) {
@@ -154,7 +196,7 @@ export class AIPlayer {
     }
   }
 
-  // ─── Hard: Lead strategy ─────────────────────────────────────────────────
+  // ─── Hard: Lead strategy ──────────────────────────────────────────────────
 
   private evaluateLeadCard(
     playableCards: Card[],
@@ -169,88 +211,77 @@ export class AIPlayer {
     const trumpKnown = trumpSuit !== null;
     const myTeam = gameState.players[playerIndex].teamId;
     const opponents = this.getOpponents(gameState, playerIndex);
-    const { myMindis, oppMindis, remaining } = this.countMindiStatus(gameState, myTeam);
+    const { myMindis, remaining } = this.countMindiStatus(gameState, myTeam);
     const mindiMajority = gameState.config.mindiMajority;
     const safeAhead = myMindis >= mindiMajority;
     const myTeamTricks = gameState.round.teamTricks[myTeam];
     const isLateGame = trickNumber > 10;
 
+    // Never lead with a mindi unless it's our only option
+    const nonMindiPlayable = playableCards.filter(c => c.rank !== '10' && !c.isFiller);
+    const leadPool = nonMindiPlayable.length > 0 ? nonMindiPlayable : playableCards;
+
     // ── 1. Mendikot/Whitewash push ──
     if (safeAhead) {
-      // All remaining Mindis secured — push for trick majority/whitewash
       if (myTeamTricks >= 8 || remaining === 0) {
-        const best = this.getHighestNonFillerCard(playableCards);
-        return best;
+        return this.getHighestCard(leadPool);
       }
-      // We have majority Mindis, lead with force to prevent losing tricks
-      const best = this.getHighestNonFillerCard(playableCards);
-      return best;
+      return this.getHighestCard(leadPool);
     }
 
-    // ── 2. Late game ──
+    // ── 2. Void exploit: lead suit where teammate is void so they can trump ──
+    const voidExploit = this.getVoidExploitLead(leadPool, gameState, playerIndex, voidMap, trumpSuit);
+    if (voidExploit) return voidExploit;
+
+    // ── 3. Late game ──
     if (isLateGame) {
-      // Pull trump if we hold it and opponents haven't voided it
       if (trumpKnown && trumpSuit) {
-        const myTrumps = playableCards.filter(c => c.suit === trumpSuit);
+        const myTrumps = leadPool.filter(c => c.suit === trumpSuit);
         const oppsHaveVoidedTrump = opponents.every(s => voidMap.get(s)?.has(trumpSuit));
         if (myTrumps.length > 0 && !oppsHaveVoidedTrump) {
           return this.getHighestCard(myTrumps);
         }
       }
-      return this.getHighestNonFillerCard(playableCards);
+      return this.getHighestCard(leadPool);
     }
 
-    // ── 3. Suit control: lead suit where we have 2+ high cards (J+) ──
+    // ── 4. Suit control: lead suit where we hold 2+ high cards (J+) ──
     const suits: Suit[] = ['hearts', 'diamonds', 'spades', 'clubs'];
     for (const suit of suits) {
-      if (suit === trumpSuit) continue; // save trump for later
+      if (suit === trumpSuit) continue;
       const highCardsInSuit = fullHand.filter(
-        c => c.suit === suit && !c.isFiller && this.getRankValue(c.rank) >= this.getRankValue('J')
+        c => c.suit === suit && !c.isFiller && !c.rank.match(/^10$/) &&
+          this.getRankValue(c.rank) >= this.getRankValue('J')
       );
       if (highCardsInSuit.length >= 2) {
-        // Check if all opponents have voided this suit (even better — guaranteed win)
         const allOppsVoided = opponents.length > 0 && opponents.every(s => voidMap.get(s)?.has(suit));
-        const suitPlayables = playableCards.filter(c => c.suit === suit);
+        const suitPlayables = leadPool.filter(c => c.suit === suit);
         if (suitPlayables.length === 0) continue;
-
-        if (allOppsVoided) {
-          // Guaranteed win — lead highest
-          return this.getHighestCard(suitPlayables);
-        }
-        // Lead lowest of this strong suit to signal control to teammate
+        if (allOppsVoided) return this.getHighestCard(suitPlayables);
         return this.getLowestCard(suitPlayables);
       }
     }
 
-    // ── 4. Void engineering (cut_hukum only, trump not yet established) ──
+    // ── 5. Void engineering (cut_hukum only, trump not yet established) ──
     if (trumpMethod === 'cut_hukum' && !trumpKnown) {
-      // Find the suit in our hand with fewest non-filler cards (closest to voiding)
       let targetSuit: Suit | null = null;
       let minCount = Infinity;
       for (const suit of suits) {
-        const nonFillers = fullHand.filter(c => c.suit === suit && !c.isFiller);
+        if (suit === trumpSuit) continue;
+        const nonFillers = fullHand.filter(c => c.suit === suit && !c.isFiller && c.rank !== '10');
         if (nonFillers.length > 0 && nonFillers.length < minCount) {
           minCount = nonFillers.length;
           targetSuit = suit;
         }
       }
       if (targetSuit) {
-        const targetPlayables = playableCards.filter(c => c.suit === targetSuit);
-        if (targetPlayables.length > 0) {
-          return this.getLowestCard(targetPlayables);
-        }
+        const targetPlayables = leadPool.filter(c => c.suit === targetSuit);
+        if (targetPlayables.length > 0) return this.getLowestCard(targetPlayables);
       }
     }
 
-    // ── 5. Mindi protection: don't lead our 10 if we have other cards ──
-    const nonMindiPlayable = playableCards.filter(c => c.rank !== '10' && !c.isFiller);
-    if (nonMindiPlayable.length > 0) {
-      // Lead lowest non-filler, non-mindi
-      return this.getLowestCard(nonMindiPlayable);
-    }
-
-    // ── 6. Default ──
-    return this.getLowestNonFillerCard(playableCards);
+    // ── 6. Default: lowest non-mindi card ──
+    return this.getLowestCard(leadPool);
   }
 
   // ─── Hard: Follow strategy ────────────────────────────────────────────────
@@ -280,64 +311,63 @@ export class AIPlayer {
 
     const leaderCard = currentTrick.cards[0]?.card;
     const leaderSeat = currentTrick.cards[0]?.seatIndex;
-    const leaderTeam = leaderSeat !== undefined ? gameState.players[leaderSeat].teamId : -1;
+    const leaderTeam = leaderSeat !== undefined ? gameState.players[leaderSeat]?.teamId : -1;
     const isTeammateLead = leaderTeam === myTeam;
-    const isOpponentLead = leaderTeam !== myTeam;
+    const isOpponentLead = !isTeammateLead;
 
-    // ── Rule 1: Mindi in trick — MAXIMUM PRIORITY ──
+    // ── Rule 1: Mindi in trick — only fight or safely gift, never recklessly ──
     if (trickHasMindi) {
       if (teammateWinning) {
-        // Gift our Mindi to teammate if held; else discard cheaply
-        const mindi = playableCards.find(c => c.rank === '10');
-        if (mindi) return mindi;
-        return this.getLowestNonFillerCard(playableCards);
+        // Gift our mindi ONLY when we're last (no one can steal the trick)
+        if (isLastPlayer) {
+          const mindi = playableCards.find(c => c.rank === '10');
+          if (mindi) return mindi;
+        }
+        return this.getLowestNonMindiCard(playableCards);
       }
-      // Opponent winning — fight for it at all costs
+      // Opponent winning — fight at all costs
       if (minWinCard) return minWinCard;
-      // Use trump to capture it
       if (trumpKnown && trumpSuit && currentTrick.ledSuit !== trumpSuit) {
         const myTrumps = playableCards.filter(c => c.suit === trumpSuit);
         if (myTrumps.length > 0) return this.getLowestCard(myTrumps);
       }
-      // Can't win — discard cheapest
-      return this.getLowestNonFillerCard(playableCards);
+      return this.getLowestNonMindiCard(playableCards);
     }
 
-    // ── Rule 2: Last player — perfect information play ──
+    // ── Rule 2: Last player — perfect information ──
     if (isLastPlayer) {
       if (teammateWinning) {
+        // Safe to gift mindi now — last position, teammate already winning
         const mindi = playableCards.find(c => c.rank === '10');
         if (mindi) return mindi;
-        return this.getLowestNonFillerCard(playableCards);
+        return this.getLowestNonMindiCard(playableCards);
       }
-      // Opponent winning — win cheaply or discard
       if (minWinCard) return minWinCard;
-      return this.getLowestNonFillerCard(playableCards);
+      return this.getLowestNonMindiCard(playableCards);
     }
 
-    // ── Rule 3: Cut_hukum coordination ──
+    // ── Rule 3: Teammate leads low → win cheaply to keep team's lead ──
+    if (isTeammateLead && leaderCard &&
+      (leaderCard.isFiller || this.getRankValue(leaderCard.rank) <= this.getRankValue('8'))) {
+      if (minWinCard && this.getRankValue(minWinCard.rank) <= this.getRankValue('Q')) {
+        return minWinCard;
+      }
+      return this.getLowestNonMindiCard(playableCards);
+    }
+
+    // ── Rule 4: cut_hukum coordination ──
     if (trumpMethod === 'cut_hukum') {
       const leaderRankVal = leaderCard ? this.getRankValue(leaderCard.rank) : 0;
       const ledSuit = currentTrick.ledSuit;
 
-      // 3a. Void in led suit → establish trump right now
+      // 4a. Void in led suit → establish trump
       if (!trumpKnown && ledSuit && playableCards[0].suit !== ledSuit) {
         return this.pickTrumpEstablishCard(playableCards, fullHand);
       }
 
-      // 3b. Teammate leads low (≤ 8 or filler) → help them win to maintain lead control
-      if (isTeammateLead && leaderCard && (leaderCard.isFiller || leaderRankVal <= this.getRankValue('8'))) {
-        // Try to win cheaply (spend ≤ Q)
-        if (minWinCard && this.getRankValue(minWinCard.rank) <= this.getRankValue('Q')) {
-          return minWinCard;
-        }
-        // Let teammate win solo — discard cheaply
-        return this.getLowestNonFillerCard(playableCards);
-      }
-
-      // 3c. Opponent leads low (filler or ≤ 7) → they may be trying to void themselves
-      // Cover with a high card of led suit to prevent them getting a safe loss
-      if (!trumpKnown && isOpponentLead && leaderCard && (leaderCard.isFiller || leaderRankVal <= this.getRankValue('7'))) {
+      // 4b. Opponent leads low → cover high to prevent cheap void
+      if (!trumpKnown && isOpponentLead && leaderCard &&
+        (leaderCard.isFiller || leaderRankVal <= this.getRankValue('7'))) {
         const ledSuitPlayables = playableCards.filter(c => c.suit === ledSuit);
         if (ledSuitPlayables.length > 0) {
           const highCard = ledSuitPlayables.find(c => this.getRankValue(c.rank) >= this.getRankValue('J'));
@@ -346,23 +376,23 @@ export class AIPlayer {
       }
     }
 
-    // ── Rule 4: Trump known — aggressive trump use ──
+    // ── Rule 5: Trump known — aggressive trump use against opponents ──
     if (trumpKnown && trumpSuit && currentWinner) {
       const winnerCard = currentWinner.card;
-      const winnerTeam = gameState.players[currentWinner.seatIndex].teamId;
+      const winnerTeam = gameState.players[currentWinner.seatIndex]?.teamId;
       const opponentWinning = winnerTeam !== myTeam;
 
       if (opponentWinning) {
         const myTrumps = playableCards.filter(c => c.suit === trumpSuit);
 
-        // 4a. Opponent winning with non-trump → cut with lowest trump (late game or safe ahead)
+        // Opponent winning with non-trump → cut with lowest trump
         if (winnerCard.suit !== trumpSuit && myTrumps.length > 0) {
           if (isLateGame || safeAhead || oppThreatening) {
             return this.getLowestCard(myTrumps);
           }
         }
 
-        // 4b. Opponent winning with trump → over-trump if we can
+        // Opponent winning with trump → over-trump if possible
         if (winnerCard.suit === trumpSuit && myTrumps.length > 0) {
           const higherTrumps = myTrumps.filter(
             c => this.getRankValue(c.rank) > this.getRankValue(winnerCard.rank)
@@ -374,14 +404,12 @@ export class AIPlayer {
       }
     }
 
-    // ── Rule 5: Teammate winning → gift Mindi or discard ──
+    // ── Rule 6: Teammate winning → discard cheap; never gift mindi mid-trick ──
     if (teammateWinning) {
-      const mindi = playableCards.find(c => c.rank === '10');
-      if (mindi) return mindi;
-      return this.getLowestNonFillerCard(playableCards);
+      return this.getLowestNonMindiCard(playableCards);
     }
 
-    // ── Rule 6: Try to win cheaply or discard ──
+    // ── Rule 7: Try to win cheaply ──
     if (minWinCard) {
       const winVal = this.getRankValue(minWinCard.rank);
       if (isLateGame || oppThreatening || winVal <= this.getRankValue('J')) {
@@ -389,7 +417,49 @@ export class AIPlayer {
       }
     }
 
-    return this.getLowestNonFillerCard(playableCards);
+    return this.getLowestNonMindiCard(playableCards);
+  }
+
+  // ─── Helper: Void exploit lead ────────────────────────────────────────────
+  //
+  // When it's our turn to lead, look for a suit where:
+  //   • A teammate has already voided (so they can trump it)
+  //   • At least one opponent still holds that suit (otherwise they'd also trump)
+  //   • The suit is not the current trump (we want opponents to follow suit)
+  //
+  // This models the scenario: "I voided diamonds, so my AI teammate should lead
+  // diamonds — I'll win with my Spades trump."
+
+  private getVoidExploitLead(
+    leadPool: Card[],
+    gameState: GameState,
+    playerIndex: number,
+    voidMap: Map<number, Set<Suit>>,
+    trumpSuit: Suit | null
+  ): Card | null {
+    const teammates = this.getTeammates(gameState, playerIndex);
+    const opponents = this.getOpponents(gameState, playerIndex);
+    const suits: Suit[] = ['hearts', 'diamonds', 'spades', 'clubs'];
+
+    for (const suit of suits) {
+      if (suit === trumpSuit) continue; // don't lead trump as the exploit suit
+
+      const teammateIsVoid = teammates.some(t => voidMap.get(t)?.has(suit));
+      if (!teammateIsVoid) continue;
+
+      // At least one opponent must still follow suit (otherwise our teammate's trump
+      // gets over-trumped and we just handed the trick to opponents)
+      const someOpponentHasSuit = opponents.length === 0 ||
+        opponents.some(o => !voidMap.get(o)?.has(suit));
+      if (!someOpponentHasSuit) continue;
+
+      const suitCards = leadPool.filter(c => c.suit === suit);
+      if (suitCards.length > 0) {
+        // Lead lowest to keep the trick cheap; teammate's trump should win it
+        return this.getLowestCard(suitCards);
+      }
+    }
+    return null;
   }
 
   // ─── Helper: Build voided suits map from completed tricks ─────────────────
@@ -402,7 +472,6 @@ export class AIPlayer {
     for (const trick of gameState.round.completedTricks) {
       if (trick.cards.length === 0) continue;
       const ledSuit = trick.cards[0].card.suit;
-      // Skip the leader (index 0), check remaining players
       for (let i = 1; i < trick.cards.length; i++) {
         const entry = trick.cards[i];
         if (entry.card.suit !== ledSuit) {
@@ -441,7 +510,7 @@ export class AIPlayer {
     return { myMindis, oppMindis, remaining };
   }
 
-  // ─── Helper: Suit strength (sum of rank values of non-filler cards) ───────
+  // ─── Helper: Suit strength ────────────────────────────────────────────────
 
   private getSuitStrength(cards: Card[], suit: Suit): number {
     return cards
@@ -449,7 +518,7 @@ export class AIPlayer {
       .reduce((sum, c) => sum + this.getRankValue(c.rank), 0);
   }
 
-  // ─── Helper: Get current trick winner ────────────────────────────────────
+  // ─── Helper: Current trick winner ────────────────────────────────────────
 
   private getCurrentTrickWinner(
     trickCards: TrickEntry[],
@@ -466,7 +535,7 @@ export class AIPlayer {
     return winner;
   }
 
-  // ─── Helper: Find cheapest winning card ──────────────────────────────────
+  // ─── Helper: Cheapest winning card ───────────────────────────────────────
 
   private getMinWinningCard(
     playableCards: Card[],
@@ -478,7 +547,6 @@ export class AIPlayer {
     if (!winner) return null;
     const ledSuit = trickCards[0].card.suit;
 
-    // Find all cards that can beat the current winner, sorted cheapest first
     const winners = playableCards
       .filter(c => this.cardBeats(c, winner.card, ledSuit, trumpSuit))
       .sort((a, b) => this.getRankValue(a.rank) - this.getRankValue(b.rank));
@@ -486,7 +554,7 @@ export class AIPlayer {
     return winners.length > 0 ? winners[0] : null;
   }
 
-  // ─── Helper: Is this AI the last to play in the trick? ───────────────────
+  // ─── Helper: Is this the last player to play this trick? ─────────────────
 
   private isLastToPlay(
     currentTrick: GameState['round']['currentTrick'],
@@ -495,10 +563,9 @@ export class AIPlayer {
     return currentTrick.cards.length === playerCount - 1;
   }
 
-  // ─── Helper: Pick best card to establish as trump (cut_hukum void) ────────
+  // ─── Helper: Pick best trump-establishing card (cut_hukum void) ──────────
 
   private pickTrumpEstablishCard(playableCards: Card[], fullHand: Card[]): Card {
-    // Choose the suit in playableCards where we hold the highest strength in fullHand
     const suits = [...new Set(playableCards.map(c => c.suit))] as Suit[];
     let bestSuit: Suit = suits[0];
     let bestStrength = -1;
@@ -511,7 +578,6 @@ export class AIPlayer {
       }
     }
 
-    // Play the lowest card of that suit (establish trump cheaply)
     const suitCards = playableCards.filter(c => c.suit === bestSuit);
     return this.getLowestCard(suitCards);
   }
@@ -531,7 +597,7 @@ export class AIPlayer {
     return false;
   }
 
-  // ─── Helper: getRankValue ─────────────────────────────────────────────────
+  // ─── Helper: Rank value ───────────────────────────────────────────────────
 
   private getRankValue(rank: string): number {
     const values: Record<string, number> = {
@@ -541,7 +607,7 @@ export class AIPlayer {
     return values[rank] || 0;
   }
 
-  // ─── Helper: isTeammateWinningTrick ──────────────────────────────────────
+  // ─── Helper: Is a teammate currently winning the trick? ──────────────────
 
   private isTeammateWinningTrick(
     trickCards: TrickEntry[],
@@ -553,7 +619,7 @@ export class AIPlayer {
     const { trumpSuit } = gameState.round;
     const winner = this.getCurrentTrickWinner(trickCards, trumpSuit);
     if (!winner) return false;
-    const winningTeam = gameState.players[winner.seatIndex].teamId;
+    const winningTeam = gameState.players[winner.seatIndex]?.teamId;
     return winningTeam === myTeam;
   }
 
@@ -576,15 +642,21 @@ export class AIPlayer {
     return sorted[Math.floor(sorted.length / 2)];
   }
 
-  /** Lowest card preferring non-filler; falls back to lowest filler if all are fillers */
-  private getLowestNonFillerCard(cards: Card[]): Card {
-    const nonFillers = cards.filter(c => !c.isFiller);
-    return nonFillers.length > 0 ? this.getLowestCard(nonFillers) : this.getLowestCard(cards);
+  /** Lowest card that is not a mindi (rank '10'); falls back to lowest overall */
+  private getLowestNonMindiCard(cards: Card[]): Card {
+    const nonMindi = cards.filter(c => c.rank !== '10' && !c.isFiller);
+    if (nonMindi.length > 0) return this.getLowestCard(nonMindi);
+    const nonMindiAny = cards.filter(c => c.rank !== '10');
+    if (nonMindiAny.length > 0) return this.getLowestCard(nonMindiAny);
+    return this.getLowestCard(cards); // forced to play mindi
   }
 
-  /** Highest card preferring non-filler */
-  private getHighestNonFillerCard(cards: Card[]): Card {
-    const nonFillers = cards.filter(c => !c.isFiller);
-    return nonFillers.length > 0 ? this.getHighestCard(nonFillers) : this.getHighestCard(cards);
+  /** Highest card that is not a mindi (rank '10'); falls back to highest overall */
+  private getHighestNonMindiCard(cards: Card[]): Card {
+    const nonMindi = cards.filter(c => c.rank !== '10' && !c.isFiller);
+    if (nonMindi.length > 0) return this.getHighestCard(nonMindi);
+    const nonMindiAny = cards.filter(c => c.rank !== '10');
+    if (nonMindiAny.length > 0) return this.getHighestCard(nonMindiAny);
+    return this.getHighestCard(cards); // forced to play mindi
   }
 }

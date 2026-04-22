@@ -1,5 +1,6 @@
 import express from 'express';
 import http from 'http';
+import https from 'https';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -48,14 +49,22 @@ const io = new Server(httpServer, {
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok', rooms: 0 }));
 
-// Self-ping to prevent Render free tier from spinning down
+// Self-ping to prevent Render free tier from spinning down.
+// Uses https when SERVER_URL starts with https:// to avoid ERR_INVALID_PROTOCOL.
 if (process.env.SERVER_URL) {
   setInterval(() => {
-    http.get(`${process.env.SERVER_URL}/health`, (res) => {
-      res.resume(); // discard response body
-    }).on('error', (err) => {
-      console.warn('[keepalive] ping failed:', err.message);
-    });
+    try {
+      const serverUrl = process.env.SERVER_URL!;
+      const healthUrl = `${serverUrl}/health`;
+      const requester = healthUrl.startsWith('https://') ? https : http;
+      requester.get(healthUrl, (res) => {
+        res.resume(); // discard response body
+      }).on('error', (err) => {
+        console.warn('[keepalive] ping failed:', err.message);
+      });
+    } catch (err) {
+      console.warn('[keepalive] unexpected error:', err);
+    }
   }, 10 * 60 * 1000); // every 10 minutes
 }
 
