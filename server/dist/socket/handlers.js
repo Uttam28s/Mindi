@@ -13,9 +13,9 @@ function publicState(state) {
 }
 function registerHandlers(io, socket) {
     // ── Create Room ─────────────────────────────────────────────────
-    socket.on('create_room', ({ playerName, playerCount, trumpMethod, gamePointsTarget }) => {
+    socket.on('create_room', ({ playerName, playerCount, trumpMethod, gamePointsTarget, aiSlots }) => {
         try {
-            const room = (0, roomManager_1.createRoom)(socket.id, playerName, playerCount, trumpMethod, gamePointsTarget);
+            const room = (0, roomManager_1.createRoom)(socket.id, playerName, playerCount, trumpMethod, gamePointsTarget, aiSlots);
             socket.join(room.code);
             socket.emit('room_created', {
                 roomCode: room.code,
@@ -56,6 +56,15 @@ function registerHandlers(io, socket) {
             players: (0, roomManager_1.getLobbyPlayers)(room)
         });
     });
+    // ── Rename Player (lobby only) ─────────────────────────────────
+    socket.on('rename_player', ({ roomCode, newName }) => {
+        const result = (0, roomManager_1.renamePlayer)(socket.id, roomCode, newName);
+        if ('error' in result) {
+            socket.emit('error', { code: 'RENAME_FAILED', message: result.error });
+            return;
+        }
+        io.to(roomCode).emit('player_renamed', { players: (0, roomManager_1.getLobbyPlayers)(result.room) });
+    });
     // ── Start Game (host only) ──────────────────────────────────────
     socket.on('start_game', ({ roomCode }) => {
         const room = (0, roomManager_1.getRoom)(roomCode);
@@ -69,17 +78,7 @@ function registerHandlers(io, socket) {
             return;
         }
         const state = result;
-        // Send each player their own hand privately
-        state.players.forEach(player => {
-            const playerSocket = io.sockets.sockets.get(player.id);
-            if (playerSocket) {
-                playerSocket.emit('game_started', {
-                    gameState: publicState(state),
-                    myHand: player.hand,
-                    mySeatIndex: player.seatIndex
-                });
-            }
-        });
+        broadcastRoundState(io, room, state, 'game_started');
     });
     // ── Band Hukum selection ────────────────────────────────────────
     socket.on('set_band_hukum', ({ roomCode, cardId }) => {
@@ -187,17 +186,78 @@ function registerHandlers(io, socket) {
             socket.emit('error', { code: 'ROUND_FAILED', message: newState.error });
             return;
         }
-        // Send each player their new hand privately
-        newState.players.forEach(player => {
-            const playerSocket = io.sockets.sockets.get(player.id);
-            if (playerSocket) {
-                playerSocket.emit('round_started', {
-                    gameState: publicState(newState),
-                    myHand: player.hand,
-                    mySeatIndex: player.seatIndex
-                });
-            }
+        broadcastRoundState(io, room, newState, 'round_started');
+    });
+    // ── AI Play Card (host acts on behalf of AI seat) ───────────────
+    socket.on('ai_play_card', ({ roomCode, seatIndex, cardId }) => {
+        const room = (0, roomManager_1.getRoom)(roomCode);
+        if (!room?.gameState) {
+            socket.emit('error', { code: 'NO_GAME', message: 'No active game' });
+            return;
+        }
+        if (room.hostSocketId !== socket.id) {
+            socket.emit('error', { code: 'UNAUTHORIZED', message: 'Only host can play for AI' });
+            return;
+        }
+        const seat = room.seats[seatIndex];
+        if (!seat?.isAI) {
+            socket.emit('error', { code: 'NOT_AI', message: 'Seat is not an AI' });
+            return;
+        }
+        const result = (0, gameEngine_1.playCard)(room.gameState, seatIndex, cardId);
+        if (result.error) {
+            socket.emit('error', { code: 'INVALID_MOVE', message: result.error });
+            return;
+        }
+        room.gameState = result.newState;
+        io.to(roomCode).emit('card_played', {
+            seatIndex,
+            cardId,
+            trickComplete: result.trickComplete,
+            gameState: publicState(result.newState),
+            ...(result.trickComplete && {
+                trickResult: {
+                    winnerSeat: result.newState.round.completedTricks.at(-1)?.winnerSeatIndex,
+                    mindisInTrick: result.newState.round.completedTricks.at(-1)?.mindisInTrick ?? 0,
+                    teamMindis: result.newState.round.teamMindis,
+                    teamTricks: result.newState.round.teamTricks
+                }
+            })
         });
+        if (result.roundComplete && result.roundResult) {
+            room.phase = result.newState.phase;
+            storeRoundResult(room, result.roundResult);
+            if (result.newState.phase === 'game_over') {
+                io.to(roomCode).emit('game_over', { winnerTeam: result.newState.winnerTeamId, finalScores: result.newState.gamePoints, roundResult: result.roundResult });
+            }
+            else {
+                io.to(roomCode).emit('round_complete', { roundResult: result.roundResult, gamePoints: result.newState.gamePoints });
+            }
+        }
+    });
+    // ── AI Set Band Hukum (host acts on behalf of AI dealer) ────────
+    socket.on('ai_set_band_hukum', ({ roomCode, seatIndex, cardId }) => {
+        const room = (0, roomManager_1.getRoom)(roomCode);
+        if (!room?.gameState) {
+            socket.emit('error', { code: 'NO_GAME', message: 'No active game' });
+            return;
+        }
+        if (room.hostSocketId !== socket.id) {
+            socket.emit('error', { code: 'UNAUTHORIZED', message: 'Only host can act for AI' });
+            return;
+        }
+        const seat = room.seats[seatIndex];
+        if (!seat?.isAI) {
+            socket.emit('error', { code: 'NOT_AI', message: 'Seat is not an AI' });
+            return;
+        }
+        const { newState, error } = (0, gameEngine_1.applyBandHukum)(room.gameState, seatIndex, cardId);
+        if (error) {
+            socket.emit('error', { code: 'INVALID_MOVE', message: error });
+            return;
+        }
+        room.gameState = newState;
+        io.to(roomCode).emit('game_state_update', { gameState: publicState(newState) });
     });
     // ── Disconnect ──────────────────────────────────────────────────
     socket.on('disconnect', () => {
@@ -211,6 +271,30 @@ function registerHandlers(io, socket) {
         else {
             // Mid-game disconnect — notify room, pause handled client-side for now
             io.to(room.code).emit('player_disconnected', { seatIndex });
+        }
+    });
+}
+/** Send each player their private hand + AI hands to host on round/game start. */
+function broadcastRoundState(io, room, state, eventName) {
+    // Build AI hands map (only needed if room has AI seats)
+    const aiHands = {};
+    for (const seat of room.seats) {
+        if (seat?.isAI)
+            aiHands[seat.seatIndex] = state.players[seat.seatIndex].hand;
+    }
+    const hasAI = Object.keys(aiHands).length > 0;
+    state.players.forEach(player => {
+        if (player.id.startsWith('ai_seat_'))
+            return; // no real socket for AI
+        const playerSocket = io.sockets.sockets.get(player.id);
+        if (playerSocket) {
+            const isHost = player.id === room.hostSocketId;
+            playerSocket.emit(eventName, {
+                gameState: publicState(state),
+                myHand: player.hand,
+                mySeatIndex: player.seatIndex,
+                ...(isHost && hasAI && { aiHands }),
+            });
         }
     });
 }
