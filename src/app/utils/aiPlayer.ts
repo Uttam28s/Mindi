@@ -191,11 +191,11 @@ export class AIPlayer {
       return this.getLowestNonMindiCard(playableCards);
     }
 
-    // ── Try to win cheaply if worth it (never with mindi) ──
-    if (safeWinCard) {
-      const winVal = this.getRankValue(safeWinCard.rank);
-      if (oppThreatening || winVal <= this.getRankValue('J')) return safeWinCard;
-    }
+    // ── Middle position: opponent is holding the best card — try to beat them ──
+    // We reach here only when no teammate is already winning (that case discards above).
+    // If we CAN win with a non-mindi card, play it. The players still to go might not
+    // hold anything higher, so throwing a low card away is worse than taking the round.
+    if (safeWinCard) return safeWinCard;
 
     return this.getLowestNonMindiCard(playableCards);
   }
@@ -471,13 +471,12 @@ export class AIPlayer {
       return this.getLowestNonMindiCard(playableCards);
     }
 
-    // ── Rule 7: Try to win cheaply (never with mindi) ──
-    if (safeWinCard) {
-      const winVal = this.getRankValue(safeWinCard.rank);
-      if (isLateGame || oppThreatening || winVal <= this.getRankValue('J')) {
-        return safeWinCard;
-      }
-    }
+    // ── Rule 7: Middle position, opponent winning — try to beat them ──
+    // We only reach here when no teammate is already winning the trick (Rule 6 handles that).
+    // An opponent holds the current best card. If a non-mindi card in our hand can beat
+    // it, play it — the remaining players might not have anything higher, so playing low
+    // would just hand them the round for free.
+    if (safeWinCard) return safeWinCard;
 
     return this.getLowestNonMindiCard(playableCards);
   }
