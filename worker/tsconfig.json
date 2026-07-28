@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  // The game engine is shared with the (now legacy) Render server rather than
+  // duplicated — these files are pure logic with no Node APIs, so they compile
+  // for Workers unchanged.
+  "include": ["src/**/*.ts", "../server/src/engine/**/*.ts", "../server/src/types.ts"]
+}

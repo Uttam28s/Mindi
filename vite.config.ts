@@ -26,8 +26,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:3001', changeOrigin: true },
-      '/socket.io': { target: 'http://localhost:3001', ws: true, changeOrigin: true },
+      // Cloudflare Worker running under `wrangler dev` (default port 8787).
+      // Leave VITE_SERVER_URL unset in dev so the client uses this same-origin proxy.
+      '/ws': { target: 'http://localhost:8787', ws: true, changeOrigin: true },
     },
   },
 })

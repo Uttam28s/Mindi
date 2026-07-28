@@ -1,34 +1,86 @@
 {
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+
+  "enabledMcpjsonServers": ["code-review-graph"],
+
   "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|Bash",
-        "command": "code-review-graph update --quiet",
-        "timeout": 5000
-      }
-    ],
     "SessionStart": [
       {
-        "command": "code-review-graph status --json",
-        "timeout": 3000
+        "hooks": [
+          {
+            "type": "command",
+            "command": "code-review-graph status",
+            "timeout": 10,
+            "statusMessage": "Checking code graph..."
+          }
+        ]
       }
     ],
-    "PreCommit": [
+    "PostToolUse": [
       {
-        "command": "code-review-graph detect-changes --brief",
-        "timeout": 10000
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "code-review-graph update --skip-flows",
+            "timeout": 60,
+            "async": true,
+            "statusMessage": "Updating code graph..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "code-review-graph detect-changes --brief",
+            "if": "Bash(git commit *)",
+            "timeout": 30,
+            "statusMessage": "Risk-scoring staged changes..."
+          }
+        ]
       }
     ]
   },
+
   "permissions": {
     "allow": [
+      "Bash(code-review-graph:*)",
+
+      "Bash(pnpm run:*)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm list:*)",
+      "Bash(pnpm install)",
+      "Bash(pnpm install --frozen-lockfile)",
+      "Bash(npm run:*)",
+      "Bash(npm --prefix server run:*)",
       "Bash(npx tsc:*)",
-      "Bash(./node_modules/.bin/tsc --noEmit)",
-      "Bash(ls node_modules/.bin/tsc*)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
       "Bash(node_modules/.bin/vite build:*)",
-      "Bash(git -C \"c:/Users/Uttam/Desktop/Projects/Games/Mindi\" config --list)",
-      "Bash(git config:*)",
-      "Bash(node_modules/.bin/tsc --noEmit)"
+
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git branch:*)",
+      "Bash(git ls-files:*)",
+      "Bash(git config --list)",
+
+      "WebFetch(domain:docs.crazygames.com)",
+      "WebFetch(domain:developer.crazygames.com)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(git commit --no-verify:*)",
+      "Bash(git reset --hard:*)"
     ]
+  },
+
+  "worktree": {
+    "symlinkDirectories": ["node_modules"]
   }
 }

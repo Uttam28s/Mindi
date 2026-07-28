@@ -1,0 +1,23 @@
+name = "mindi-server"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+
+# Durable Object: one instance per room code, addressed via idFromName(roomCode).
+[[durable_objects.bindings]]
+name = "MINDI_ROOM"
+class_name = "MindiRoom"
+
+# IMPORTANT: must be new_sqlite_classes, not new_classes.
+# The Workers Free plan only supports SQLite-backed Durable Objects;
+# a KV-backed class (new_classes) fails to deploy without a paid plan.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MindiRoom"]
+
+[vars]
+# Comma-separated extra allowed origins. *.crazygames.com and localhost are
+# always permitted (see isAllowedOrigin in src/index.ts).
+CLIENT_ORIGIN = "https://mindi.vercel.app"
+
+[observability]
+enabled = true

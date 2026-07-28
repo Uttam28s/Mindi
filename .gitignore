@@ -1,1 +1,30 @@
 node_modules
+server/node_modules
+
+# .env IS committed on purpose: it holds only VITE_SERVER_URL (a public
+# build-time value) and Vercel reads it at build time. Keep secrets out of it.
+.env.local
+.env.*.local
+
+# Personal Claude Code overrides (team settings live in .claude/settings.json)
+.claude/settings.local.json
+.claude/worktrees/
+
+# Code graph database (rebuilt locally via `code-review-graph build`)
+.code-review-graph/
+
+# Cloudflare Wrangler local state (DO storage, build cache)
+.wrangler/
+worker/.wrangler/
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Office lock files
+~$*
+
+# Build output for the server (dist/ at root is committed for deploys)
+server/dist/
