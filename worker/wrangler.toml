@@ -17,7 +17,12 @@ new_sqlite_classes = ["MindiRoom"]
 [vars]
 # Comma-separated list of allowed browser origins. localhost is always
 # permitted for development (see isAllowedOrigin in src/index.ts).
-CLIENT_ORIGIN = "https://mindi.vercel.app"
+CLIENT_ORIGIN = "https://mindi-drab.vercel.app"
+
+# Vercel mints a new alias per deployment, so previews and branch URLs cannot be
+# listed above. Any host ending in "-<this suffix>" is allowed. The suffix
+# includes the Vercel team slug, so only this account can match it.
+VERCEL_PREVIEW_SUFFIX = "uttam28s-projects.vercel.app"
 
 [observability]
 enabled = true

@@ -11,18 +11,32 @@ export { MindiRoom } from './room';
 export interface Env {
   MINDI_ROOM: DurableObjectNamespace;
   CLIENT_ORIGIN?: string;
+  VERCEL_PREVIEW_SUFFIX?: string;
 }
 
 /**
- * Allows the configured origins plus localhost for development.
+ * Allows the configured origins, this Vercel account's preview/branch aliases,
+ * and localhost for development.
  */
 function isAllowedOrigin(origin: string | null, env: Env): boolean {
   if (!origin) return true; // non-browser / same-origin clients
+
   const configured = (env.CLIENT_ORIGIN ?? '')
     .split(',')
     .map(s => s.trim())
     .filter(Boolean);
   if (configured.includes(origin)) return true;
+
+  // Vercel generates a fresh alias per deployment (mindi-<hash>-<account>.vercel.app)
+  // plus a per-branch one, so they cannot be enumerated in CLIENT_ORIGIN. Matching on
+  // the account-scoped suffix covers them all; because the suffix contains the Vercel
+  // team slug, only this account can produce a host that satisfies it.
+  const previewSuffix = (env.VERCEL_PREVIEW_SUFFIX ?? '').trim();
+  if (previewSuffix && origin.startsWith('https://')) {
+    const host = origin.slice('https://'.length);
+    if (host.endsWith(`-${previewSuffix}`) && /^[a-z0-9.-]+$/.test(host)) return true;
+  }
+
   if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return true;
   if (/^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return true;
   return false;
