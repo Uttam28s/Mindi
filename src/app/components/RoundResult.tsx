@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 import { Trophy, Zap, Star } from 'lucide-react';
 import { Sounds } from '../utils/sounds';
-import { CG } from '../utils/crazygames';
 
 interface RoundResultProps {
   winnerTeam: 0 | 1;
@@ -17,7 +16,6 @@ export function RoundResult({ winnerTeam, category, pointsAwarded, teamScores, t
   useEffect(() => {
     if (category === 'mendikot' || category === 'whitewash') {
       Sounds.bigWin();
-      CG.happytime();
     } else {
       Sounds.trickWin();
     }

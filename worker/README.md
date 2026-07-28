@@ -46,8 +46,8 @@ npm run deploy
 Note the deployed URL (`https://mindi-server.<subdomain>.workers.dev`), then:
 
 1. Set `CLIENT_ORIGIN` in `wrangler.toml` `[vars]` to your Vercel URL and
-   redeploy. `*.crazygames.com` and `localhost` are always allowed, so you do
-   not need to list them.
+   redeploy. `localhost` is always allowed, so you do not need to list it.
+   Add any extra origins (e.g. a custom domain) comma-separated.
 2. Set `VITE_SERVER_URL` to the Worker URL — in the **Vercel dashboard** and in
    local `.env`. Use the `https://` form; the client rewrites it to `wss://`.
 3. Redeploy the client so the new URL is baked into the bundle.

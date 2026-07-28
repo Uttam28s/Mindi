@@ -15,8 +15,8 @@ tag = "v1"
 new_sqlite_classes = ["MindiRoom"]
 
 [vars]
-# Comma-separated extra allowed origins. *.crazygames.com and localhost are
-# always permitted (see isAllowedOrigin in src/index.ts).
+# Comma-separated list of allowed browser origins. localhost is always
+# permitted for development (see isAllowedOrigin in src/index.ts).
 CLIENT_ORIGIN = "https://mindi.vercel.app"
 
 [observability]

@@ -14,8 +14,7 @@ export interface Env {
 }
 
 /**
- * Ported verbatim in spirit from the Render server so the same origins keep
- * working: configured origins, any *.crazygames.com subdomain, and localhost.
+ * Allows the configured origins plus localhost for development.
  */
 function isAllowedOrigin(origin: string | null, env: Env): boolean {
   if (!origin) return true; // non-browser / same-origin clients
@@ -24,7 +23,6 @@ function isAllowedOrigin(origin: string | null, env: Env): boolean {
     .map(s => s.trim())
     .filter(Boolean);
   if (configured.includes(origin)) return true;
-  if (/^https?:\/\/([a-z0-9-]+\.)*crazygames\.com$/.test(origin)) return true;
   if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return true;
   if (/^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin)) return true;
   return false;

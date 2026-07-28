@@ -11,7 +11,7 @@ import { TeamShuffleAnimation } from './components/TeamShuffleAnimation';
 import { GameState, Card, Player, Suit, Rank, CompletedTrick } from './types';
 import { AIPlayer } from './utils/aiPlayer';
 import { connectSocket, disconnectSocket, getSocket } from './utils/socket';
-import { CG } from './utils/crazygames';
+import { loadData, saveData } from './utils/storage';
 import { buildTourScenario, TourScenario } from './utils/tourScript';
 
 type Screen = 'home' | 'setup' | 'join' | 'lobby' | 'loading' | 'team_reveal' | 'game' | 'round_result' | 'game_over';
@@ -318,47 +318,28 @@ export default function App() {
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const tourAiTimeoutRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
-  // ── CrazyGames SDK: gameplay lifecycle signals ────────────────
-  // gameplayStart = player is actively playing cards
-  // gameplayStop  = any non-gameplay screen (menus, loading, results)
-  useEffect(() => {
-    if (screen === 'game') {
-      CG.gameplayStart();
-    } else {
-      CG.gameplayStop();
-    }
-  }, [screen]);
-
-
-  // ── CrazyGames startup: username, invite param, instant multiplayer ──
+  // ── Startup: first-run tour, and shared ?room= links ──────────
   //
-  // Three things handled here (in priority order):
-  //  1. Get CrazyGames username → use as player name so CG usernames show in-game
-  //  2. Invite param (roomName) → player followed an invite link → auto-join
-  //  3. isInstantMultiplayer → party leader → skip setup, auto-create room
+  // Two things handled here:
+  //  1. Show the guided tour once, on a player's first visit.
+  //  2. A ?room=CODE link opens the join screen with the code pre-filled.
   useEffect(() => {
-    const initCG = async () => {
-      // 1. Resolve player name: prefer CrazyGames account username
-      // Race against a 3-second timeout so localhost (where the CG SDK can hang
-      // waiting for a server response) doesn't block the tour and game startup.
-      const cgUser = await Promise.race([
-        CG.getUser(),
-        new Promise<null>(resolve => setTimeout(() => resolve(null), 3000)),
-      ]);
-      const playerName = cgUser?.username || CG.loadData('mindi_player_name') || 'Player';
-      if (cgUser?.username) {
-        CG.saveData('mindi_player_name', cgUser.username);
-      }
+    const init = () => {
+      const playerName = loadData('mindi_player_name') || 'Player';
+
+      const params = new URLSearchParams(window.location.search);
+      const roomParam = params.get('room');
+      const sharedRoom = roomParam && /^[A-Za-z0-9]{6}$/.test(roomParam)
+        ? roomParam.toUpperCase()
+        : null;
 
       // ── First-time tour detection ──────────────────────────────
-      const tourCompleted = CG.loadData('tour_completed');
-      const hasInvite = !!CG.getInviteParam('roomName');
-      const isInstant = CG.isInstantMultiplayer();
-      const forceTour = import.meta.env.DEV && new URLSearchParams(window.location.search).has('tour');
+      const tourCompleted = loadData('tour_completed');
+      const forceTour = import.meta.env.DEV && params.has('tour');
       if (import.meta.env.DEV) {
-        console.log('[Tour] tourCompleted:', tourCompleted, '| hasInvite:', hasInvite, '| isInstant:', isInstant, '| forceTour:', forceTour);
+        console.log('[Tour] tourCompleted:', tourCompleted, '| sharedRoom:', sharedRoom, '| forceTour:', forceTour);
       }
-      if (forceTour || (!tourCompleted && !hasInvite && !isInstant)) {
+      if (forceTour || (!tourCompleted && !sharedRoom)) {
         setTimeout(() => {
           const scenario = buildTourScenario(playerName);
           setTourScenario(scenario);
@@ -370,68 +351,14 @@ export default function App() {
         return;
       }
 
-      // Helper: connect socket and auto-join a room
-      const autoJoin = (roomCode: string, name: string) => {
-        setIsOnlineMode(true);
-        setSocketError(null);
-        setScreen('loading');
-        const s = connectSocket();
-        connectTimeoutRef.current = setTimeout(() => {
-          if (s.connected) return;
-          s.disconnect();
-          setIsOnlineMode(false);
-          setScreen('join');
-          setSocketError('Could not connect to the game server. Please try again.');
-        }, 10_000);
-        const doJoin = () => {
-          if (connectTimeoutRef.current) { clearTimeout(connectTimeoutRef.current); connectTimeoutRef.current = null; }
-          s.emit('join_room', { roomCode: roomCode.toUpperCase(), playerName: name });
-        };
-        if (s.connected) doJoin(); else s.once('connect', doJoin);
-      };
-
-      // Helper: connect socket and auto-create a room with default settings
-      const autoCreate = (name: string) => {
-        setIsOnlineMode(true);
-        setSocketError(null);
-        setScreen('loading');
-        const s = connectSocket();
-        connectTimeoutRef.current = setTimeout(() => {
-          if (s.connected) return;
-          s.disconnect();
-          setIsOnlineMode(false);
-          setScreen('home');
-          setSocketError('Could not connect to the game server. Please try again.');
-        }, 10_000);
-        const doCreate = () => {
-          if (connectTimeoutRef.current) { clearTimeout(connectTimeoutRef.current); connectTimeoutRef.current = null; }
-          // Default settings for instant multiplayer: 4 players, random trump, 5-point game
-          s.emit('create_room', { playerName: name, playerCount: 4, trumpMethod: 'random', gamePointsTarget: 5 });
-        };
-        if (s.connected) doCreate(); else s.once('connect', doCreate);
-      };
-
-      // 2. Invite param — this player followed an invite link
-      const inviteRoom = CG.getInviteParam('roomName');
-      if (inviteRoom) {
-        if (cgUser?.username) {
-          // Logged-in CG user: auto-join without showing join screen
-          autoJoin(inviteRoom, playerName);
-        } else {
-          // Guest: pre-fill room code and show join screen for name entry
-          setInviteRoomCode(inviteRoom.toUpperCase());
-          setScreen('join');
-        }
-        return;
-      }
-
-      // 3. Instant multiplayer — this player is the party leader
-      if (CG.isInstantMultiplayer()) {
-        autoCreate(playerName);
+      // Shared ?room= link — pre-fill the code, player just enters a name.
+      if (sharedRoom) {
+        setInviteRoomCode(sharedRoom);
+        setScreen('join');
       }
     };
 
-    initCG();
+    init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -786,7 +713,7 @@ export default function App() {
   // ─── Tour handlers ────────────────────────────────────────────
 
   const completeTour = useCallback(() => {
-    CG.saveData('tour_completed', 'true');
+    saveData('tour_completed', 'true');
     tourAiTimeoutRef.current.forEach(clearTimeout);
     tourAiTimeoutRef.current = [];
     setIsTourActive(false);
@@ -956,7 +883,7 @@ export default function App() {
   const handleRenamePlayer = (newName: string) => {
     const trimmed = newName.trim().slice(0, 20);
     if (!trimmed) return;
-    CG.saveData(PLAYER_NAME_KEY, trimmed);
+    saveData(PLAYER_NAME_KEY, trimmed);
     if (isOnlineMode) {
       getSocket().emit('rename_player', { roomCode, newName: trimmed });
       return;
@@ -986,7 +913,7 @@ export default function App() {
   };
 
   const handleQuickPlay = () => {
-    const savedName = CG.loadData('mindi_player_name') || 'You';
+    const savedName = loadData('mindi_player_name') || 'You';
     const quickSetup: GameSetup = {
       playerCount: 4,
       trumpMethod: 'cut_hukum',
