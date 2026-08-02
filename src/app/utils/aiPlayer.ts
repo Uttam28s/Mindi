@@ -84,21 +84,44 @@ export class AIPlayer {
     const safeWinCard = this.getSafeWinCard(playableCards, currentTrick.cards, trumpSuit);
     const minWinCard = this.getMinWinningCard(playableCards, currentTrick.cards, trumpSuit);
     const myTeam = gameState.players[playerIndex].teamId;
-    const { myMindis, oppMindis } = this.countMindiStatus(gameState, myTeam);
+    const { myMindis } = this.countMindiStatus(gameState, myTeam);
     const mindiMajority = gameState.config.mindiMajority;
     const safeAhead = myMindis >= mindiMajority;
-    const oppThreatening = oppMindis >= mindiMajority - 1;
     const voidMap = this.buildVoidedSuits(gameState);
 
     // ── Leading ──
     if (isLeading) {
       // Never lead with mindi unless that's literally all we have
       const nonMindiCards = playableCards.filter(c => c.rank !== '10');
-      const leadPool = nonMindiCards.length > 0 ? nonMindiCards : playableCards;
+      let leadPool = nonMindiCards.length > 0 ? nonMindiCards : playableCards;
 
-      // Lead a suit where a teammate is void → they can trump it
+      // Hold the trump back. This used to be missing entirely, so as soon as
+      // trump was set the "middle card" of a hand was frequently a trump and
+      // the AI opened with it — spending its best defensive card to win a
+      // trick nobody was contesting.
+      if (trumpSuit && !this.shouldLeadTrump(gameState, playerIndex, voidMap, trumpSuit)) {
+        const nonTrump = leadPool.filter(c => c.suit !== trumpSuit);
+        if (nonTrump.length > 0) leadPool = nonTrump;
+      }
+
+      // 1. Best case: lead a suit our partner is void in so they can ruff it
+      //    and the trick comes to our team for free.
       const voidExploit = this.getVoidExploitLead(leadPool, gameState, playerIndex, voidMap, trumpSuit);
       if (voidExploit) return voidExploit;
+
+      // 2. Endgame / trump-draw: now trump is worth spending, and spending it
+      //    beats any subtler plan.
+      if (trumpSuit && this.shouldLeadTrump(gameState, playerIndex, voidMap, trumpSuit)) {
+        const trumps = leadPool.filter(c => c.suit === trumpSuit);
+        if (trumps.length > 0) return this.getHighestCard(trumps);
+      }
+
+      // 3. No known void yet — lead the suit the table is shortest of, which is
+      //    the fastest way to *create* one for our partner.
+      if (!safeAhead) {
+        const starved = this.pickStarvedSuitLead(leadPool, gameState, fullHand, trumpSuit, playerIndex, voidMap);
+        if (starved) return starved;
+      }
 
       if (safeAhead) return this.getHighestNonMindiCard(leadPool);
       return this.getMiddleCard(leadPool);
@@ -235,27 +258,39 @@ export class AIPlayer {
     const trumpKnown = trumpSuit !== null;
     const myTeam = gameState.players[playerIndex].teamId;
     const opponents = this.getOpponents(gameState, playerIndex);
-    const { myMindis, remaining } = this.countMindiStatus(gameState, myTeam);
+    const { myMindis } = this.countMindiStatus(gameState, myTeam);
     const mindiMajority = gameState.config.mindiMajority;
     const safeAhead = myMindis >= mindiMajority;
-    const myTeamTricks = gameState.round.teamTricks[myTeam];
     const isLateGame = trickNumber > 10;
 
     // Never lead with a mindi unless it's our only option
     const nonMindiPlayable = playableCards.filter(c => c.rank !== '10' && !c.isFiller);
-    const leadPool = nonMindiPlayable.length > 0 ? nonMindiPlayable : playableCards;
+    let leadPool = nonMindiPlayable.length > 0 ? nonMindiPlayable : playableCards;
 
-    // ── 1. Mendikot/Whitewash push ──
+    // Same trump conservation as the medium strategy.
+    if (trumpSuit && !this.shouldLeadTrump(gameState, playerIndex, voidMap, trumpSuit)) {
+      const nonTrump = leadPool.filter(c => c.suit !== trumpSuit);
+      if (nonTrump.length > 0) leadPool = nonTrump;
+    }
+
+    // ── 1. Void exploit runs FIRST. Setting up a partner ruff is worth more
+    //       than any push, and it used to sit behind the safeAhead branch where
+    //       it could never fire once we were ahead on Mindis. ──
+    const voidExploit = this.getVoidExploitLead(leadPool, gameState, playerIndex, voidMap, trumpSuit);
+    if (voidExploit) return voidExploit;
+
+    // ── 2. Mendikot/Whitewash push ──
     if (safeAhead) {
-      if (myTeamTricks >= 8 || remaining === 0) {
-        return this.getHighestCard(leadPool);
-      }
       return this.getHighestCard(leadPool);
     }
 
-    // ── 2. Void exploit: lead suit where teammate is void so they can trump ──
-    const voidExploit = this.getVoidExploitLead(leadPool, gameState, playerIndex, voidMap, trumpSuit);
-    if (voidExploit) return voidExploit;
+    // ── 2b. Manufacture a void for our partner by draining the shortest suit ──
+    if (trumpSuit && this.shouldLeadTrump(gameState, playerIndex, voidMap, trumpSuit)) {
+      const trumps = leadPool.filter(c => c.suit === trumpSuit);
+      if (trumps.length > 0) return this.getHighestCard(trumps);
+    }
+    const starved = this.pickStarvedSuitLead(leadPool, gameState, fullHand, trumpSuit, playerIndex, voidMap);
+    if (starved && trickNumber <= 10) return starved;
 
     // ── 3. Late game ──
     if (isLateGame) {
@@ -328,9 +363,8 @@ export class AIPlayer {
     const currentWinner = this.getCurrentTrickWinner(currentTrick.cards, trumpSuit);
     const minWinCard = this.getMinWinningCard(playableCards, currentTrick.cards, trumpSuit);
     const myTeam = gameState.players[playerIndex].teamId;
-    const { myMindis, oppMindis } = this.countMindiStatus(gameState, myTeam);
+    const { oppMindis } = this.countMindiStatus(gameState, myTeam);
     const mindiMajority = gameState.config.mindiMajority;
-    const safeAhead = myMindis >= mindiMajority;
     const oppThreatening = oppMindis >= mindiMajority - 1;
 
     const leaderCard = currentTrick.cards[0]?.card;
@@ -502,25 +536,87 @@ export class AIPlayer {
     const opponents = this.getOpponents(gameState, playerIndex);
     const suits: Suit[] = ['hearts', 'diamonds', 'spades', 'clubs'];
 
+    // Rank candidate suits rather than taking the first hit, so a proven void
+    // always beats a merely-likely one.
+    let best: { card: Card; score: number } | null = null;
+
     for (const suit of suits) {
-      if (suit === trumpSuit) continue; // don't lead trump as the exploit suit
+      if (suit === trumpSuit) continue; // never burn trump as the exploit suit
+
+      const suitCards = leadPool.filter(c => c.suit === suit);
+      if (suitCards.length === 0) continue;
 
       const teammateIsVoid = teammates.some(t => voidMap.get(t)?.has(suit));
-      if (!teammateIsVoid) continue;
 
-      // At least one opponent must still follow suit (otherwise our teammate's trump
-      // gets over-trumped and we just handed the trick to opponents)
+      // If nobody on our side can ruff it, this isn't an exploit — leading it
+      // just donates the trick.
+      const teammateCanRuff = teammateIsVoid &&
+        teammates.some(t => !voidMap.get(t)?.has(trumpSuit ?? ('' as Suit)));
+      if (!teammateCanRuff) continue;
+
+      // At least one opponent must still be able to follow, or our partner's
+      // trump gets over-trumped and we've handed the trick away.
       const someOpponentHasSuit = opponents.length === 0 ||
         opponents.some(o => !voidMap.get(o)?.has(suit));
       if (!someOpponentHasSuit) continue;
 
-      const suitCards = leadPool.filter(c => c.suit === suit);
-      if (suitCards.length > 0) {
-        // Lead lowest to keep the trick cheap; teammate's trump should win it
-        return this.getLowestCard(suitCards);
+      // Prefer the suit where the fewest opponents can still ruff over us.
+      const oppsVoidToo = opponents.filter(o => voidMap.get(o)?.has(suit)).length;
+      const score = 100 - oppsVoidToo * 30;
+
+      if (!best || score > best.score) {
+        // Lead low — the trick should be won by our partner's trump, not by our
+        // own high card, and we keep the high card for later.
+        best = { card: this.getLowestCard(suitCards), score };
       }
     }
-    return null;
+
+    return best?.card ?? null;
+  }
+
+  /**
+   * Which suit to open with when there's no ruff to set up.
+   *
+   * Preference order: a suit the table is running short of (so our partner is
+   * likely to become void and can ruff soon), then a suit we hold length in.
+   * Trump is excluded entirely — `shouldLeadTrump` owns that decision.
+   */
+  private pickStarvedSuitLead(
+    leadPool: Card[],
+    gameState: GameState,
+    fullHand: Card[],
+    trumpSuit: Suit | null,
+    playerIndex: number,
+    voidMap: Map<number, Set<Suit>>
+  ): Card | null {
+    const suits: Suit[] = ['hearts', 'diamonds', 'spades', 'clubs'];
+    const teammates = this.getTeammates(gameState, playerIndex);
+    const opponents = this.getOpponents(gameState, playerIndex);
+    let best: { card: Card; unseen: number } | null = null;
+
+    for (const suit of suits) {
+      if (suit === trumpSuit) continue;
+      const suitCards = leadPool.filter(c => c.suit === suit);
+      if (suitCards.length === 0) continue;
+
+      // Pointless if our partner is already void here and has no trump left to
+      // ruff with — we'd just be feeding the trick to whoever can still follow.
+      const partnerStuck = teammates.length > 0 && teammates.every(t =>
+        voidMap.get(t)?.has(suit) && (!trumpSuit || voidMap.get(t)?.has(trumpSuit)));
+      if (partnerStuck) continue;
+
+      // Dangerous if an opponent is void here and still holds trump — they ruff
+      // and take it.
+      const oppCanRuff = trumpSuit != null && opponents.some(o =>
+        voidMap.get(o)?.has(suit) && !voidMap.get(o)?.has(trumpSuit));
+      if (oppCanRuff) continue;
+
+      const unseen = this.unseenInSuit(gameState, fullHand, suit);
+      if (!best || unseen < best.unseen) {
+        best = { card: this.getLowestCard(suitCards), unseen };
+      }
+    }
+    return best?.card ?? null;
   }
 
   // ─── Helper: Build voided suits map from completed tricks ─────────────────
@@ -530,17 +626,66 @@ export class AIPlayer {
     for (const player of gameState.players) {
       voidMap.set(player.seatIndex, new Set<Suit>());
     }
-    for (const trick of gameState.round.completedTricks) {
-      if (trick.cards.length === 0) continue;
-      const ledSuit = trick.cards[0].card.suit;
-      for (let i = 1; i < trick.cards.length; i++) {
-        const entry = trick.cards[i];
-        if (entry.card.suit !== ledSuit) {
-          voidMap.get(entry.seatIndex)?.add(ledSuit);
-        }
+
+    const scan = (cards: TrickEntry[]) => {
+      if (cards.length === 0) return;
+      const ledSuit = cards[0].card.suit;
+      for (let i = 1; i < cards.length; i++) {
+        // Following with a different suit is a hard tell: you had none of the
+        // led suit, because the rules force you to follow when you can.
+        if (cards[i].card.suit !== ledSuit) voidMap.get(cards[i].seatIndex)?.add(ledSuit);
       }
-    }
+    };
+
+    for (const trick of gameState.round.completedTricks) scan(trick.cards);
+    // Also read the trick in progress — a partner who just discarded off-suit
+    // is void right now, and waiting for the trick to complete throws that away.
+    scan(gameState.round.currentTrick.cards);
+
     return voidMap;
+  }
+
+  /**
+   * How many of a suit are still unaccounted for, from this seat's point of
+   * view: total in the deck(s), minus what's been played, minus what I hold.
+   * Used to spot suits the table is running dry on.
+   */
+  private unseenInSuit(gameState: GameState, hand: Card[], suit: Suit): number {
+    const perDeck = 7; // active ranks A,K,Q,J,10,9,8
+    let total = gameState.config.deckCount * perDeck;
+    for (const trick of gameState.round.completedTricks)
+      for (const e of trick.cards) if (e.card.suit === suit && !e.card.isFiller) total--;
+    for (const e of gameState.round.currentTrick.cards)
+      if (e.card.suit === suit && !e.card.isFiller) total--;
+    for (const c of hand) if (c.suit === suit && !c.isFiller) total--;
+    return Math.max(0, total);
+  }
+
+  /**
+   * Should we lead trump at all?
+   *
+   * Trump is the team's insurance against losing a Mindi, so spending it to win
+   * a trick nobody contested is a waste. Hold it unless there's a reason.
+   */
+  private shouldLeadTrump(
+    gameState: GameState,
+    playerIndex: number,
+    voidMap: Map<number, Set<Suit>>,
+    trumpSuit: Suit | null
+  ): boolean {
+    if (!trumpSuit) return false;
+    const { trickNumber } = gameState.round;
+
+    // Endgame: trumps left unspent are trumps wasted.
+    if (trickNumber > 11) return true;
+
+    // Drawing trumps: if opponents still hold trump and we're deep in the round,
+    // pulling them out protects the Mindis we still have to win.
+    const opponents = this.getOpponents(gameState, playerIndex);
+    const oppsAllVoidTrump = opponents.length > 0 && opponents.every(o => voidMap.get(o)?.has(trumpSuit));
+    if (oppsAllVoidTrump) return false; // nothing to draw, save them for ruffing
+
+    return trickNumber >= 9;
   }
 
   // ─── Helper: Team utilities ───────────────────────────────────────────────

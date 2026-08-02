@@ -22,114 +22,69 @@ function TourTooltip({
 
   return (
     <div
-      className={`fixed left-1/2 -translate-x-1/2 ${posClass} z-[500] w-[92vw] max-w-sm`}
+      className={`fixed left-1/2 -translate-x-1/2 ${posClass} z-[500] w-[92vw] max-w-sm u-anim-pop-in`}
       style={{
-        background: 'rgba(10,4,2,0.97)',
-        border: '1px solid rgba(212,168,67,0.35)',
-        borderRadius: 20,
-        padding: '18px 18px 14px',
-        boxShadow: '0 8px 40px rgba(0,0,0,0.85), 0 0 0 1px rgba(212,168,67,0.08)',
-        animation: 'tourFadeIn 0.25s ease',
+        background: 'rgba(46,26,96,.96)',
+        border: '3px solid rgba(255,255,255,.22)',
+        borderRadius: 22,
+        padding: '16px 16px 14px',
+        boxShadow: '0 8px 0 rgba(30,16,60,.55), 0 20px 44px rgba(14,6,36,.6)',
       }}
     >
-      {/* Header row: dots + skip */}
+      {/* Progress + skip */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
           {Array.from({ length: totalSteps }).map((_, i) => (
             <div
               key={i}
               style={{
-                height: 5,
-                width: i === stepIndex ? 20 : 5,
+                height: 6,
+                width: i === stepIndex ? 22 : 6,
                 borderRadius: 99,
-                background: i === stepIndex ? '#d4a843' : 'rgba(212,168,67,0.2)',
-                transition: 'width 0.3s ease',
+                background: i <= stepIndex ? '#FFC93C' : 'rgba(255,255,255,.2)',
+                transition: 'width .3s cubic-bezier(.34,1.56,.64,1), background .3s',
               }}
             />
           ))}
         </div>
         <button
           onClick={onSkip}
+          className="u-body"
           style={{
-            fontSize: 11,
-            color: 'rgba(255,255,255,0.35)',
-            padding: '4px 10px',
-            border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 99,
-            background: 'transparent',
-            cursor: 'pointer',
-            fontFamily: 'inherit',
+            fontSize: 11.5, color: 'rgba(255,255,255,.6)',
+            padding: '4px 11px', borderRadius: 99,
+            border: '2px solid rgba(255,255,255,.18)',
+            background: 'rgba(255,255,255,.08)', cursor: 'pointer',
           }}
         >
-          Skip Tour
+          Skip
         </button>
       </div>
 
-      {/* Title */}
-      <div
-        style={{
-          fontFamily: "'Cinzel', serif",
-          fontWeight: 700,
-          fontSize: 14,
-          color: '#e8d5a8',
-          marginBottom: 8,
-          letterSpacing: '0.03em',
-        }}
-      >
+      <div className="u-display" style={{ fontSize: 19, color: '#FFC93C', marginBottom: 5 }}>
         {step.title}
       </div>
 
-      {/* Description */}
-      <div
-        style={{
-          fontSize: 13,
-          color: 'rgba(255,255,255,0.72)',
-          lineHeight: 1.65,
-          marginBottom: 14,
-        }}
-      >
+      <div className="u-body" style={{
+        fontSize: 13.5, fontWeight: 500, color: 'rgba(255,255,255,.82)',
+        lineHeight: 1.55, marginBottom: 13,
+      }}>
         {step.description}
       </div>
 
-      {/* Action area */}
       {canAdvance ? (
-        <button
-          onClick={onNext}
-          style={{
-            width: '100%',
-            padding: '11px 0',
-            borderRadius: 12,
-            background: 'linear-gradient(135deg, rgba(212,168,67,0.2), rgba(180,120,40,0.1))',
-            border: '1px solid rgba(212,168,67,0.35)',
-            color: '#d4a843',
-            fontSize: 13,
-            fontFamily: "'Cinzel', serif",
-            letterSpacing: '0.05em',
-            cursor: 'pointer',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLButtonElement).style.background =
-              'linear-gradient(135deg, rgba(212,168,67,0.3), rgba(180,120,40,0.18))';
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLButtonElement).style.background =
-              'linear-gradient(135deg, rgba(212,168,67,0.2), rgba(180,120,40,0.1))';
-          }}
-        >
-          {stepIndex === totalSteps - 1 ? 'Start Playing!' : 'Next →'}
+        <button className="u-btn u-btn--marigold" style={{ width: '100%', fontSize: 15 }} onClick={onNext}>
+          <span style={{ position: 'relative', zIndex: 1 }}>
+            {stepIndex === totalSteps - 1 ? "Let's play!" : 'Next'}
+          </span>
         </button>
       ) : (
-        <div
-          style={{
-            textAlign: 'center',
-            fontSize: 12,
-            color: 'rgba(212,168,67,0.85)',
-            animation: 'goldPulse 1.4s ease-in-out infinite',
-            letterSpacing: '0.04em',
-          }}
-        >
-          ✦ Play the highlighted card to continue
+        <div className="u-anim-breathe u-body" style={{
+          textAlign: 'center', fontSize: 12.5, color: '#FFC93C',
+          padding: '9px 0', borderRadius: 14,
+          background: 'rgba(255,201,60,.12)', border: '2px dashed rgba(255,201,60,.4)',
+        }}>
+          Tap the glowing card to continue
         </div>
       )}
     </div>
@@ -141,10 +96,11 @@ export function GameTour({
 }: GameTourProps) {
   return (
     <>
-      {/* Dim overlay */}
+      {/* Dim overlay — tinted toward the table's own colour rather than flat
+          black, so the board still reads as the same place underneath. */}
       <div
         className="fixed inset-0 pointer-events-none"
-        style={{ background: 'rgba(0,0,0,0.52)', zIndex: 200 }}
+        style={{ background: 'rgba(20,10,44,.55)', zIndex: 200 }}
       />
 
       {/* Tooltip — pointer-events on so buttons work */}

@@ -204,6 +204,8 @@ export function startNextRound(
   category: 'normal' | 'mendikot' | 'whitewash'
 ): GameState | { error: string } {
   if (!room.gameState) return { error: 'No game state' };
+  // A mid-game disconnect nulls a seat; the seats.map() below would throw.
+  if (room.seats.some(s => s === null)) return { error: 'A player left the game' };
   const prev = room.gameState;
   const seats = room.seats as RoomSeat[];
 

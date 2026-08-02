@@ -1,7 +1,10 @@
 import { useState, useRef } from 'react';
 import { Play, Users, Zap, X, BookOpen, ChevronRight, ChevronLeft } from 'lucide-react';
 import { Sounds } from '../utils/sounds';
+import { haptic } from '../utils/juice';
 import { StepVisual } from './HowToPlayVisuals';
+import { UtsavBackground } from './UtsavBackground';
+import { SoundToggle } from './SoundToggle';
 
 interface HomeScreenProps {
   onCreateGame: () => void;
@@ -174,24 +177,24 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-      style={{ background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(6px)' }}
+      style={{ background: 'rgba(20,10,44,0.9)' }}
       onClick={onClose}>
 
       <div className="relative w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl overflow-hidden animate-slide-up"
-        style={{ background: 'linear-gradient(160deg,#1e0808,#2a0f0f)', border: '1px solid rgba(212,168,67,0.18)', maxHeight: '90vh' }}
+        style={{ background: 'linear-gradient(168deg,#40287F,#2C1F5E)', border: '1px solid rgba(255,201,60,0.18)', maxHeight: '90vh' }}
         onClick={e => e.stopPropagation()}>
 
         {/* ── Header ── */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3"
-          style={{ borderBottom: '1px solid rgba(212,168,67,0.1)' }}>
+          style={{ borderBottom: '1px solid rgba(255,201,60,0.1)' }}>
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-              style={{ background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.2)' }}>
-              <BookOpen style={{ width: 15, height: 15, color: '#d4a843' }} />
+              style={{ background: 'rgba(255,201,60,0.1)', border: '1px solid rgba(255,201,60,0.2)' }}>
+              <BookOpen style={{ width: 15, height: 15, color: '#FFC93C' }} />
             </div>
             <div>
-              <div className="font-cinzel text-sm text-white tracking-wide">How to Play</div>
-              <div className="text-[9px] tracking-widest" style={{ color: 'rgba(212,168,67,0.45)' }}>MINDI · MENDIKOT</div>
+              <div className="u-display text-sm text-white tracking-wide">How to Play</div>
+              <div className="text-[9px] tracking-widest" style={{ color: 'rgba(255,201,60,0.45)' }}>MINDI · MENDIKOT</div>
             </div>
           </div>
           <button onClick={onClose}
@@ -203,7 +206,7 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
 
         {/* ── Language Tabs ── */}
         <div className="flex items-center gap-1.5 px-5 py-3 overflow-x-auto"
-          style={{ borderBottom: '1px solid rgba(212,168,67,0.07)' }}>
+          style={{ borderBottom: '1px solid rgba(255,201,60,0.07)' }}>
           {LANG_ORDER.map(l => {
             const c = LANG_CONTENT[l];
             const active = lang === l;
@@ -211,11 +214,11 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
               <button key={l} onClick={() => { setLang(l); setStep(0); }}
                 className="flex-shrink-0 flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all"
                 style={{
-                  background: active ? 'rgba(212,168,67,0.12)' : 'rgba(255,255,255,0.03)',
-                  border: `1px solid ${active ? 'rgba(212,168,67,0.35)' : 'rgba(255,255,255,0.06)'}`,
+                  background: active ? 'rgba(255,201,60,0.12)' : 'rgba(255,255,255,0.03)',
+                  border: `1px solid ${active ? 'rgba(255,201,60,0.35)' : 'rgba(255,255,255,0.06)'}`,
                 }}>
-                <span className="font-bold" style={{ fontSize: 13, color: active ? '#d4a843' : 'rgba(255,255,255,0.4)' }}>{c.label}</span>
-                <span style={{ fontSize: 8, color: active ? 'rgba(212,168,67,0.6)' : 'rgba(255,255,255,0.2)' }}>{c.nativeLabel}</span>
+                <span className="font-bold" style={{ fontSize: 13, color: active ? '#FFC93C' : 'rgba(255,255,255,0.4)' }}>{c.label}</span>
+                <span style={{ fontSize: 8, color: active ? 'rgba(255,201,60,0.6)' : 'rgba(255,255,255,0.2)' }}>{c.nativeLabel}</span>
               </button>
             );
           })}
@@ -223,9 +226,9 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
 
         {/* ── Goal Banner ── */}
         <div className="mx-5 mt-4 mb-3 px-4 py-2.5 rounded-2xl flex items-center gap-2.5"
-          style={{ background: 'linear-gradient(90deg,rgba(212,168,67,0.12),rgba(212,168,67,0.05))', border: '1px solid rgba(212,168,67,0.2)' }}>
+          style={{ background: 'linear-gradient(90deg,rgba(255,201,60,0.12),rgba(255,201,60,0.05))', border: '1px solid rgba(255,201,60,0.2)' }}>
           <span style={{ fontSize: 20 }}>🎴</span>
-          <span className="font-semibold" style={{ fontSize: 13, color: '#d4a843' }}>{content.goal}</span>
+          <span className="font-semibold" style={{ fontSize: 13, color: '#FFC93C' }}>{content.goal}</span>
         </div>
 
         {/* ── Steps ── */}
@@ -238,7 +241,7 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
                 className="rounded-full transition-all duration-300"
                 style={{
                   width: i === step ? 20 : 6, height: 6,
-                  background: i === step ? '#d4a843' : 'rgba(212,168,67,0.2)',
+                  background: i === step ? '#FFC93C' : 'rgba(255,201,60,0.2)',
                 }} />
             ))}
           </div>
@@ -270,14 +273,14 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
 
                   {/* Text card */}
                   <div className="rounded-2xl p-4 mb-3"
-                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(212,168,67,0.1)' }}>
+                    style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,201,60,0.1)' }}>
                     <div className="flex items-start gap-3">
                       <div className="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
-                        style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.15)', fontSize: 24 }}>
+                        style={{ background: 'rgba(255,201,60,0.08)', border: '1px solid rgba(255,201,60,0.15)', fontSize: 24 }}>
                         {s.icon}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-cinzel font-bold mb-1.5" style={{ fontSize: 13, color: '#e8d5a8' }}>{s.title}</div>
+                        <div className="u-display font-bold mb-1.5" style={{ fontSize: 13, color: '#FFF0BE' }}>{s.title}</div>
                         <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>{s.desc}</div>
                       </div>
                     </div>
@@ -293,8 +296,8 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
                 className="absolute left-0 top-0 bottom-0 flex items-center justify-start pl-1"
                 style={{ width: 36, background: 'linear-gradient(90deg,rgba(18,4,4,0.5),transparent)', zIndex: 5 }}>
                 <div className="w-7 h-7 rounded-full flex items-center justify-center"
-                  style={{ background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.2)' }}>
-                  <ChevronLeft style={{ width: 14, height: 14, color: 'rgba(212,168,67,0.7)' }} />
+                  style={{ background: 'rgba(255,201,60,0.1)', border: '1px solid rgba(255,201,60,0.2)' }}>
+                  <ChevronLeft style={{ width: 14, height: 14, color: 'rgba(255,201,60,0.7)' }} />
                 </div>
               </button>
             )}
@@ -303,8 +306,8 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
                 className="absolute right-0 top-0 bottom-0 flex items-center justify-end pr-1"
                 style={{ width: 36, background: 'linear-gradient(270deg,rgba(18,4,4,0.5),transparent)', zIndex: 5 }}>
                 <div className="w-7 h-7 rounded-full flex items-center justify-center"
-                  style={{ background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.2)' }}>
-                  <ChevronRight style={{ width: 14, height: 14, color: 'rgba(212,168,67,0.7)' }} />
+                  style={{ background: 'rgba(255,201,60,0.1)', border: '1px solid rgba(255,201,60,0.2)' }}>
+                  <ChevronRight style={{ width: 14, height: 14, color: 'rgba(255,201,60,0.7)' }} />
                 </div>
               </button>
             )}
@@ -313,12 +316,12 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
           {/* Step counter + swipe hint */}
           <div className="flex items-center justify-center gap-2 mt-1 mb-4 px-5">
             <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>{step + 1} / {totalSteps}</span>
-            <span style={{ fontSize: 9, color: 'rgba(212,168,67,0.25)' }}>· swipe or tap arrows ·</span>
+            <span style={{ fontSize: 9, color: 'rgba(255,201,60,0.25)' }}>· swipe or tap arrows ·</span>
           </div>
 
           {/* ── Scoring table ── */}
-          <div className="px-5" style={{ borderTop: '1px solid rgba(212,168,67,0.1)', paddingTop: 12, marginBottom: 16 }}>
-            <div className="font-cinzel text-xs mb-3 tracking-wider" style={{ color: 'rgba(212,168,67,0.55)' }}>SCORING</div>
+          <div className="px-5" style={{ borderTop: '1px solid rgba(255,201,60,0.1)', paddingTop: 12, marginBottom: 16 }}>
+            <div className="u-display text-xs mb-3 tracking-wider" style={{ color: 'rgba(255,201,60,0.55)' }}>SCORING</div>
             <div className="space-y-2">
               {content.scoring.map((row, i) => (
                 <div key={i} className="flex items-center gap-3 px-3 py-2 rounded-xl"
@@ -326,9 +329,9 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
                   <div className="w-14 text-center font-bold rounded-lg py-1"
                     style={{
                       fontSize: 11,
-                      background: i === 1 ? 'rgba(212,168,67,0.12)' : i === 2 ? 'rgba(96,165,250,0.1)' : 'rgba(255,255,255,0.05)',
-                      color: i === 1 ? '#d4a843' : i === 2 ? '#6fa3d4' : 'rgba(255,255,255,0.6)',
-                      border: `1px solid ${i === 1 ? 'rgba(212,168,67,0.2)' : i === 2 ? 'rgba(96,165,250,0.2)' : 'rgba(255,255,255,0.07)'}`,
+                      background: i === 1 ? 'rgba(255,201,60,0.12)' : i === 2 ? 'rgba(37,201,245,0.1)' : 'rgba(255,255,255,0.05)',
+                      color: i === 1 ? '#FFC93C' : i === 2 ? '#25C9F5' : 'rgba(255,255,255,0.6)',
+                      border: `1px solid ${i === 1 ? 'rgba(255,201,60,0.2)' : i === 2 ? 'rgba(37,201,245,0.2)' : 'rgba(255,255,255,0.07)'}`,
                     }}>
                     {row.pts}
                   </div>
@@ -345,8 +348,8 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
         {/* ── Footer CTA ── */}
         <div className="px-5 pb-6 pt-1">
           <button onClick={onClose}
-            className="w-full py-3.5 rounded-2xl font-cinzel tracking-wider text-sm transition-all hover:scale-[1.02]"
-            style={{ background: 'linear-gradient(135deg,rgba(212,168,67,0.25),rgba(180,120,40,0.15))', border: '1px solid rgba(212,168,67,0.3)', color: '#d4a843' }}>
+            className="w-full py-3.5 rounded-2xl u-display tracking-wider text-sm transition-all hover:scale-[1.02]"
+            style={{ background: 'linear-gradient(135deg,rgba(255,201,60,0.25),rgba(180,120,40,0.15))', border: '1px solid rgba(255,201,60,0.3)', color: '#FFC93C' }}>
             Let's Play! ♠
           </button>
         </div>
@@ -358,145 +361,200 @@ function HowToPlayModal({ onClose }: { onClose: () => void }) {
 
 /* ── Home Screen ─────────────────────────────────────────────────── */
 
+/* ── Utsav logo: chunky stacked type on a spinning suit rosette ─────── */
+
+function Logo() {
+  const suits = ['hearts', 'spades', 'diamonds', 'clubs'] as const;
+  const paths: Record<string, string> = {
+    hearts:  'M12 20.9 4.1 13a5.2 5.2 0 0 1 7.3-7.4l.6.6.6-.6A5.2 5.2 0 0 1 19.9 13z',
+    diamonds:'M12 2.2 21.2 12 12 21.8 2.8 12z',
+    spades:  'M12 2.2C12 2.2 4.1 8.4 4.1 13.2a4.7 4.7 0 0 0 7.3 3.9c-.3 2-1.2 3.5-2.4 4.4h6a6.4 6.4 0 0 1-2.4-4.4 4.7 4.7 0 0 0 7.3-3.9c0-4.8-7.9-11-7.9-11z',
+    clubs:   'M12 2.1a4.1 4.1 0 0 0-2.7 7.2A4.1 4.1 0 1 0 7 16.8a4 4 0 0 0 3.4-1.9c-.2 2.1-1.1 3.7-2.3 4.6h7.8c-1.2-.9-2.1-2.5-2.3-4.6a4 4 0 0 0 3.4 1.9 4.1 4.1 0 1 0-2.3-7.5A4.1 4.1 0 0 0 12 2.1z',
+  };
+  const cols = ['#FF4D8D', '#7B5CFF', '#FFC93C', '#38E08A'];
+
+  return (
+    <div className="text-center u-anim-pop-in" style={{ marginBottom: 26 }}>
+      {/* four suits arranged as a rosette, gently counter-rotating */}
+      <div style={{ position: 'relative', width: 104, height: 104, margin: '0 auto 10px' }}>
+        <div className="u-ambient" style={{ position: 'absolute', inset: 0, animation: 'spin-slow 26s linear infinite' }}>
+          {suits.map((s, i) => {
+            const a = (i / 4) * Math.PI * 2 - Math.PI / 2;
+            return (
+              <div key={s} style={{
+                position: 'absolute', left: '50%', top: '50%',
+                transform: `translate(-50%,-50%) translate(${Math.cos(a) * 34}px, ${Math.sin(a) * 34}px)`,
+              }}>
+                <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d={paths[s]} fill={cols[i]} transform="translate(0,1)" opacity=".45" />
+                  <path d={paths[s]} fill={cols[i]} />
+                </svg>
+              </div>
+            );
+          })}
+        </div>
+        <div className="u-anim-breathe" style={{
+          position: 'absolute', inset: 26, borderRadius: '50%',
+          background: 'radial-gradient(circle at 35% 30%, #FFF2C4, #FFC93C 62%, #E09A00 100%)',
+          boxShadow: '0 4px 0 #C98A00, 0 10px 20px rgba(30,16,60,.4), inset 0 -4px 8px rgba(201,138,0,.5)',
+        }} />
+      </div>
+
+      <div className="u-title" style={{ fontSize: 'clamp(52px,15vw,74px)', letterSpacing: '.01em' }}>
+        MINDI
+      </div>
+
+      <div style={{
+        display: 'inline-block', marginTop: 4, padding: '5px 16px', borderRadius: 999,
+        background: 'rgba(255,255,255,.18)', border: '2px solid rgba(255,255,255,.34)',
+        boxShadow: '0 3px 0 rgba(52,36,110,.3)',
+      }}>
+        <span className="u-body" style={{ fontSize: 12.5, color: '#fff', letterSpacing: '.06em' }}>
+          MENDIKOT · 4–10 PLAYERS
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Big chunky menu button ─────────────────────────────────────────── */
+
+function MenuButton({
+  onClick, icon, title, subtitle, variant, badge, wide,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  variant: 'holi' | 'sky' | 'mint' | 'jamun' | 'marigold';
+  badge?: string;
+  wide?: boolean;
+}) {
+  const cls = variant === 'holi' ? '' : `u-btn--${variant}`;
+  return (
+    <button
+      onClick={onClick}
+      className={`u-btn ${cls}`}
+      style={{
+        width: '100%',
+        padding: wide ? '16px 20px' : '18px 14px',
+        borderRadius: 22,
+        display: 'flex',
+        alignItems: 'center',
+        gap: wide ? 14 : 8,
+        flexDirection: wide ? 'row' : 'column',
+        justifyContent: wide ? 'flex-start' : 'center',
+        textAlign: wide ? 'left' : 'center',
+      }}
+    >
+      <span style={{
+        width: wide ? 46 : 40, height: wide ? 46 : 40, flex: 'none',
+        borderRadius: 14, display: 'grid', placeItems: 'center',
+        background: 'rgba(255,255,255,.26)',
+        boxShadow: 'inset 0 -3px 0 rgba(0,0,0,.12), inset 0 2px 0 rgba(255,255,255,.4)',
+        position: 'relative', zIndex: 1,
+      }}>
+        {icon}
+      </span>
+      <span style={{ position: 'relative', zIndex: 1, flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: wide ? 21 : 15.5, lineHeight: 1.1 }}>{title}</span>
+        <span style={{ display: 'block', fontSize: wide ? 12.5 : 11, fontWeight: 600, opacity: .82, lineHeight: 1.25 }}>
+          {subtitle}
+        </span>
+      </span>
+      {badge && (
+        <span className="u-anim-breathe" style={{
+          position: 'relative', zIndex: 1, flex: 'none',
+          padding: '5px 12px', borderRadius: 999, fontSize: 11.5,
+          background: '#fff', color: '#C41F5E',
+          boxShadow: '0 2px 0 rgba(0,0,0,.16)',
+        }}>
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/* ── Home Screen ────────────────────────────────────────────────────── */
+
 export function HomeScreen({ onCreateGame, onJoinGame, onQuickPlay }: HomeScreenProps) {
   const [showHowToPlay, setShowHowToPlay] = useState(false);
-  const btn = (fn: () => void) => () => { Sounds.click(); fn(); };
+  const btn = (fn: () => void) => () => { Sounds.click(); haptic(11); fn(); };
 
   return (
     <>
-      <div className="min-h-screen relative overflow-hidden"
-        style={{ background: 'linear-gradient(160deg, #1a0505 0%, #2d0a0a 30%, #1e0808 60%, #120404 100%)' }}>
+      <div className="min-h-screen relative overflow-hidden">
+        <UtsavBackground variant="menu" />
 
-        {/* Ornamental arch */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] opacity-[0.06]">
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[250px] rounded-t-full border-t-2 border-l-2 border-r-2"
-            style={{ borderColor: 'rgba(212,168,67,0.5)' }} />
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[440px] h-[220px] rounded-t-full border-t border-l border-r"
-            style={{ borderColor: 'rgba(212,168,67,0.3)' }} />
+        <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 20 }}>
+          <SoundToggle />
         </div>
 
-        {/* Ambient glow */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[400px] h-[400px] rounded-full"
-          style={{ background: 'radial-gradient(circle, rgba(212,168,67,0.06), transparent 70%)' }} />
-
-        {/* Floating card silhouettes */}
-        {[{ x: '12%', y: '20%', r: -15, d: '8s' }, { x: '82%', y: '30%', r: 10, d: '10s' }, { x: '8%', y: '65%', r: -8, d: '9s' }].map((c, i) => (
-          <div key={i} className="absolute opacity-[0.04] animate-float"
-            style={{ left: c.x, top: c.y, transform: `rotate(${c.r}deg)`, animationDuration: c.d, animationDelay: `${i}s` }}>
-            <div className="w-12 h-18 rounded-md" style={{ border: '1.5px solid rgba(212,168,67,0.6)', width: 48, height: 68 }} />
-          </div>
-        ))}
-
         {/* Content */}
-        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center p-6 max-w-lg mx-auto">
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center p-6 max-w-md mx-auto"
+          style={{ paddingTop: 96 }}>
 
-          {/* ── Logo ── */}
-          <div className="text-center mb-10 animate-fade-in">
-            <div className="inline-block mb-5 relative w-24 h-24">
-              <div className="absolute inset-0 rounded-full animate-spin-slow"
-                style={{ border: '1px solid rgba(212,168,67,0.15)' }} />
-              <div className="absolute inset-2 rounded-full"
-                style={{ border: '1px solid rgba(212,168,67,0.1)' }} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-4xl" style={{ color: '#d4a843', filter: 'drop-shadow(0 0 12px rgba(212,168,67,0.4))' }}>♠</span>
-              </div>
-            </div>
+          <Logo />
 
-            <div className="font-cinzel text-5xl md:text-6xl mb-2 tracking-[0.1em]"
-              style={{ color: '#d4a843', fontWeight: 800, textShadow: '0 0 20px rgba(212,168,67,0.3)' }}>
-              MINDI
-            </div>
-
-            <div className="flex items-center justify-center gap-4 mb-2">
-              <div className="h-px w-16" style={{ background: 'linear-gradient(90deg, transparent, rgba(212,168,67,0.4))' }} />
-              <p className="text-xs tracking-[0.12em]" style={{ color: 'rgba(212,168,67,0.5)' }}>
-                THE CLASSIC INDIAN CARD GAME
-              </p>
-              <div className="h-px w-16" style={{ background: 'linear-gradient(90deg, rgba(212,168,67,0.4), transparent)' }} />
-            </div>
-            <p className="text-[10px] tracking-widest" style={{ color: 'rgba(255,255,255,0.18)' }}>
-              MENDIKOT · 4–10 PLAYERS · TWO TEAMS
-            </p>
-          </div>
-
-          {/* ── Action Buttons ── */}
-          <div className="w-full space-y-4 mb-8">
+          <div className="w-full" style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
             {onQuickPlay && (
-              <button onClick={btn(onQuickPlay)}
-                className="group w-full relative overflow-hidden rounded-2xl p-[1px] transition-all duration-300 hover:scale-[1.02]"
-                style={{ background: 'linear-gradient(135deg, rgba(212,168,67,0.6), rgba(180,120,40,0.3), rgba(212,168,67,0.6))' }}>
-                <div className="relative rounded-2xl px-6 py-5 overflow-hidden" style={{ background: 'linear-gradient(135deg, #2a0f0f, #3d1515)' }}>
-                  <div className="relative flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-                        style={{ background: 'rgba(212,168,67,0.1)', border: '1px solid rgba(212,168,67,0.25)' }}>
-                        <Zap className="w-6 h-6" style={{ color: '#d4a843' }} />
-                      </div>
-                      <div className="text-left">
-                        <div className="font-cinzel text-lg text-white tracking-wide">Quick Play</div>
-                        <div className="text-[11px]" style={{ color: 'rgba(212,168,67,0.5)' }}>Instant match vs AI</div>
-                      </div>
-                    </div>
-                    <div className="px-3 py-1 rounded-full text-[9px] font-bold tracking-wider animate-bounce-subtle"
-                      style={{ background: 'rgba(212,168,67,0.12)', color: '#d4a843', border: '1px solid rgba(212,168,67,0.25)' }}>
-                      PLAY
-                    </div>
-                  </div>
-                </div>
-              </button>
+              <div className="u-anim-drop-in" style={{ animationDelay: '80ms' }}>
+                <MenuButton
+                  wide
+                  onClick={btn(onQuickPlay)}
+                  variant="holi"
+                  icon={<Zap style={{ width: 24, height: 24, color: '#fff' }} />}
+                  title="Quick Play"
+                  subtitle="Jump straight into a match"
+                  badge="GO"
+                />
+              </div>
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={btn(onCreateGame)}
-                className="group rounded-xl p-[1px] transition-all duration-300 hover:scale-[1.03]"
-                style={{ background: 'linear-gradient(135deg, rgba(212,168,67,0.3), rgba(120,80,20,0.15))' }}>
-                <div className="rounded-xl px-4 py-5" style={{ background: '#1e0a0a' }}>
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                      style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.15)' }}>
-                      <Play className="w-5 h-5" style={{ color: '#d4a843' }} />
-                    </div>
-                    <div className="font-cinzel text-sm text-white text-center">Create Game</div>
-                    <div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.25)' }}>Host a room</div>
-                  </div>
-                </div>
-              </button>
-
-              <button onClick={btn(onJoinGame)}
-                className="group rounded-xl p-[1px] transition-all duration-300 hover:scale-[1.03]"
-                style={{ background: 'linear-gradient(135deg, rgba(212,168,67,0.3), rgba(120,80,20,0.15))' }}>
-                <div className="rounded-xl px-4 py-5" style={{ background: '#1e0a0a' }}>
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg flex items-center justify-center"
-                      style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.15)' }}>
-                      <Users className="w-5 h-5" style={{ color: '#d4a843' }} />
-                    </div>
-                    <div className="font-cinzel text-sm text-white text-center">Join Game</div>
-                    <div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.25)' }}>Enter code</div>
-                  </div>
-                </div>
-              </button>
+              <div className="u-anim-drop-in" style={{ animationDelay: '160ms' }}>
+                <MenuButton
+                  onClick={btn(onCreateGame)}
+                  variant="sky"
+                  icon={<Play style={{ width: 20, height: 20, color: '#fff' }} />}
+                  title="Create"
+                  subtitle="Host a room"
+                />
+              </div>
+              <div className="u-anim-drop-in" style={{ animationDelay: '230ms' }}>
+                <MenuButton
+                  onClick={btn(onJoinGame)}
+                  variant="mint"
+                  icon={<Users style={{ width: 20, height: 20, color: '#04351D' }} />}
+                  title="Join"
+                  subtitle="Enter a code"
+                />
+              </div>
             </div>
           </div>
 
-          {/* ── How to Play trigger ── */}
-          <button onClick={() => { Sounds.click(); setShowHowToPlay(true); }}
-            className="flex items-center gap-2.5 px-5 py-2.5 rounded-full mb-6 transition-all hover:scale-[1.03]"
+          {/* ── How to Play ── */}
+          <button
+            onClick={() => { Sounds.click(); haptic(11); setShowHowToPlay(true); }}
+            className="u-btn u-anim-drop-in"
             style={{
-              background: 'rgba(212,168,67,0.07)',
-              border: '1px solid rgba(212,168,67,0.2)',
-              color: 'rgba(212,168,67,0.7)',
-            }}>
-            <BookOpen style={{ width: 14, height: 14 }} />
-            <span className="text-xs tracking-wider font-semibold">How to Play</span>
-            <span className="text-[9px] tracking-widest opacity-60">EN · हि · ગુ · म · த</span>
+              animationDelay: '300ms',
+              background: 'rgba(255,255,255,.2)',
+              boxShadow: '0 4px 0 rgba(52,36,110,.42), inset 0 2px 0 rgba(255,255,255,.34)',
+              padding: '11px 20px', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 9,
+            }}
+          >
+            <BookOpen style={{ width: 15, height: 15, position: 'relative', zIndex: 1 }} />
+            <span style={{ position: 'relative', zIndex: 1 }}>How to Play</span>
+            <span style={{ position: 'relative', zIndex: 1, fontSize: 10.5, opacity: .78 }}>
+              EN · हि · ગુ · म · த
+            </span>
           </button>
 
-          <div className="text-[9px] tracking-widest" style={{ color: 'rgba(255,255,255,0.1)' }}>
-            A ROYAL INDIAN CARD TRADITION
+          <div className="u-body" style={{ marginTop: 22, fontSize: 11, color: 'rgba(255,255,255,.5)', letterSpacing: '.1em' }}>
+            खेलो · રમો · விளையாடு
           </div>
-
-
         </div>
       </div>
 

@@ -1,7 +1,9 @@
 import { useState } from 'react';
-import { ArrowLeft, LogIn, User } from 'lucide-react';
+import { ArrowLeft, LogIn } from 'lucide-react';
 import { Sounds } from '../utils/sounds';
+import { haptic } from '../utils/juice';
 import { loadData, saveData } from '../utils/storage';
+import { UtsavBackground } from './UtsavBackground';
 
 interface JoinGameScreenProps {
   onBack: () => void;
@@ -10,15 +12,40 @@ interface JoinGameScreenProps {
   defaultRoomCode?: string;
 }
 
+const fieldStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '13px 15px',
+  borderRadius: 16,
+  background: 'rgba(20,10,44,.5)',
+  border: '2.5px solid rgba(255,255,255,.22)',
+  color: '#fff',
+  fontFamily: "'Baloo 2', system-ui, sans-serif",
+  fontWeight: 600,
+  fontSize: 16,
+  outline: 'none',
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  marginBottom: 6,
+  fontFamily: "'Baloo 2', system-ui, sans-serif",
+  fontWeight: 700,
+  fontSize: 12,
+  letterSpacing: '.09em',
+  textTransform: 'uppercase',
+  color: 'rgba(255,255,255,.6)',
+};
+
 export function JoinGameScreen({ onBack, onJoin, defaultRoomCode }: JoinGameScreenProps) {
   const [roomCode, setRoomCode] = useState(defaultRoomCode ?? '');
   const [playerName, setPlayerName] = useState(() => loadData('mindi_player_name') || '');
   const [error, setError] = useState('');
 
   const handleJoin = () => {
-    if (!playerName.trim()) { setError('Enter your name'); return; }
-    if (roomCode.length !== 6) { setError('Enter a valid 6-char code'); return; }
+    if (!playerName.trim()) { setError('We need a name to seat you at the table.'); return; }
+    if (roomCode.length !== 6) { setError('Room codes are 6 characters — check and try again.'); return; }
     Sounds.click();
+    haptic(12);
     saveData('mindi_player_name', playerName.trim());
     onJoin(roomCode.toUpperCase(), playerName.trim());
   };
@@ -26,61 +53,99 @@ export function JoinGameScreen({ onBack, onJoin, defaultRoomCode }: JoinGameScre
   const canJoin = playerName.trim().length > 0 && roomCode.length === 6;
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-5" style={{ background: 'linear-gradient(160deg, #1a0505, #2d0a0a, #1e0808)' }}>
-      <div className="relative w-full max-w-md animate-fade-in">
-        <button onClick={onBack} className="flex items-center gap-2 mb-6" style={{ color: 'rgba(212,168,67,0.4)' }}>
-          <ArrowLeft className="w-4 h-4" /> <span className="text-sm">Back</span>
+    <div className="min-h-screen flex items-center justify-center p-5 relative" style={{ overflow: 'hidden' }}>
+      <UtsavBackground variant="menu" />
+
+      <div className="relative z-10 w-full u-anim-pop-in" style={{ maxWidth: 400 }}>
+        <button
+          onClick={() => { Sounds.click(); onBack(); }}
+          className="u-btn"
+          style={{
+            marginBottom: 14, padding: '8px 15px', fontSize: 13.5,
+            background: 'rgba(255,255,255,.16)',
+            boxShadow: '0 3px 0 rgba(30,16,60,.5)',
+            display: 'inline-flex', alignItems: 'center', gap: 7,
+          }}
+        >
+          <ArrowLeft style={{ width: 15, height: 15, position: 'relative', zIndex: 1 }} />
+          <span style={{ position: 'relative', zIndex: 1 }}>Back</span>
         </button>
 
-        <div className="royal-glass rounded-2xl p-7">
-          <div className="text-center mb-7">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl mb-3" style={{ background: 'rgba(212,168,67,0.08)', border: '1px solid rgba(212,168,67,0.2)' }}>
-              <LogIn className="w-7 h-7" style={{ color: '#d4a843' }} />
-            </div>
-            <h1 className="font-cinzel text-lg text-gold tracking-wider mb-1">JOIN GAME</h1>
+        <div className="u-panel" style={{ padding: 22, background: 'rgba(46,26,96,.9)' }}>
+          <div className="u-title" style={{ fontSize: 34, textAlign: 'center', marginBottom: 18 }}>
+            JOIN A GAME
           </div>
 
-          <div className="space-y-5">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 15 }}>
             <div>
-              <label className="text-[10px] uppercase tracking-wider mb-1.5 block" style={{ color: 'rgba(212,168,67,0.4)' }}>Your Name</label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'rgba(212,168,67,0.25)' }} />
-                <input type="text" placeholder="Enter your name" value={playerName}
-                  onChange={(e) => { setPlayerName(e.target.value); setError(''); }} maxLength={20}
-                  className="w-full pl-10 pr-4 py-3 rounded-lg text-sm text-white placeholder:opacity-20 focus:outline-none"
-                  style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(212,168,67,0.1)' }} />
-              </div>
+              <label htmlFor="join-name" style={labelStyle}>Your name</label>
+              <input
+                id="join-name"
+                type="text"
+                placeholder="What should we call you?"
+                value={playerName}
+                onChange={e => { setPlayerName(e.target.value); setError(''); }}
+                maxLength={20}
+                style={fieldStyle}
+              />
             </div>
 
             <div>
-              <label className="text-[10px] uppercase tracking-wider mb-1.5 block" style={{ color: 'rgba(212,168,67,0.4)' }}>Room Code</label>
-              <input type="text" placeholder="ABC123" value={roomCode}
-                onChange={(e) => { setRoomCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)); setError(''); }}
+              <label htmlFor="join-code" style={labelStyle}>Room code</label>
+              <input
+                id="join-code"
+                type="text"
+                inputMode="text"
+                autoCapitalize="characters"
+                placeholder="ABC123"
+                value={roomCode}
+                onChange={e => {
+                  setRoomCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6));
+                  setError('');
+                }}
                 maxLength={6}
-                className="w-full py-4 text-center font-cinzel text-2xl tracking-[0.3em] text-white uppercase placeholder:opacity-10 focus:outline-none rounded-lg"
-                style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(212,168,67,0.1)' }} />
+                style={{
+                  ...fieldStyle,
+                  textAlign: 'center',
+                  fontSize: 30,
+                  fontWeight: 800,
+                  letterSpacing: '.24em',
+                  textIndent: '.24em',
+                  padding: '13px 10px',
+                }}
+              />
             </div>
 
             {error && (
-              <div className="text-center text-xs py-2 rounded-lg animate-fade-in" style={{ color: '#f87171', background: 'rgba(220,50,50,0.08)', border: '1px solid rgba(220,50,50,0.15)' }}>
+              <div className="u-anim-pop-in u-body" role="alert" style={{
+                fontSize: 13, textAlign: 'center', padding: '9px 12px', borderRadius: 14,
+                color: '#fff', background: 'rgba(255,92,92,.22)', border: '2px solid #FF5C5C',
+              }}>
                 {error}
               </div>
             )}
 
-            <button onClick={handleJoin} disabled={!canJoin}
-              className="w-full rounded-xl p-[1px] transition-all"
-              style={{ background: canJoin ? 'linear-gradient(135deg, rgba(212,168,67,0.5), rgba(180,120,40,0.3))' : 'rgba(255,255,255,0.03)', opacity: canJoin ? 1 : 0.4 }}>
-              <div className="rounded-xl py-3.5 flex items-center justify-center gap-2" style={{ background: '#2a0f0f' }}>
-                <LogIn className="w-4 h-4" style={{ color: '#d4a843' }} />
-                <span className="font-cinzel tracking-wider text-white">JOIN</span>
-              </div>
+            <button
+              className="u-btn u-btn--mint"
+              onClick={handleJoin}
+              disabled={!canJoin}
+              style={{ width: '100%', fontSize: 17 }}
+            >
+              <span style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}>
+                <LogIn style={{ width: 18, height: 18 }} /> Join game
+              </span>
             </button>
           </div>
 
-          <div className="mt-5 pt-4 text-center" style={{ borderTop: '1px solid rgba(212,168,67,0.08)' }}>
-            <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
-              No code? <button onClick={onBack} className="underline" style={{ color: 'rgba(212,168,67,0.5)' }}>Create a game</button>
-            </p>
+          <div className="u-body" style={{
+            marginTop: 16, paddingTop: 13, textAlign: 'center', fontSize: 12.5,
+            color: 'rgba(255,255,255,.5)', borderTop: '2px solid rgba(255,255,255,.12)',
+          }}>
+            No code?{' '}
+            <button onClick={() => { Sounds.click(); onBack(); }}
+              style={{ color: '#FFC93C', textDecoration: 'underline', background: 'none', border: 0, cursor: 'pointer', font: 'inherit' }}>
+              Host your own
+            </button>
           </div>
         </div>
       </div>

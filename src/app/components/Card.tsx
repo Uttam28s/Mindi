@@ -1,4 +1,7 @@
+import { useRef, useCallback, useState, useEffect } from 'react';
 import { Card as CardType } from '../types';
+import { Sounds } from '../utils/sounds';
+import { haptic, prefersReduced } from '../utils/juice';
 
 interface CardProps {
   card: CardType;
@@ -9,201 +12,380 @@ interface CardProps {
   size?: 'sm' | 'md' | 'lg';
   glowColor?: string;
   dealDelay?: number;
+  /** Index within the hand — drives the idle bob offset so cards breathe out of phase. */
+  bobIndex?: number;
+  /** Suppresses hover/tilt/idle. Used for cards on the table. */
+  inert?: boolean;
 }
 
-const suitColors: Record<string, { main: string; accent: string }> = {
-  hearts:   { main: '#c0181a', accent: 'rgba(192,24,26,0.15)' },
-  diamonds: { main: '#c2410c', accent: 'rgba(194,65,12,0.15)' },
-  spades:   { main: '#1a1a2e', accent: 'rgba(26,26,46,0.1)'   },
-  clubs:    { main: '#14532d', accent: 'rgba(20,83,45,0.1)'   },
+/* ── Suit colours. Saturated candy, not the old desaturated maroon set. ───── */
+const SUIT: Record<string, { ink: string; deep: string; soft: string; robe: string }> = {
+  //                                                          robe = the court figure's gown.
+  //                                                          Dark enough to hold the gold and
+  //                                                          the tabard, tinted so each suit's
+  //                                                          court reads as its own.
+  hearts:   { ink: '#FF3B6B', deep: '#C41F4A', soft: '#FFE4EB', robe: '#3A1020' },
+  diamonds: { ink: '#FF8A00', deep: '#C25E00', soft: '#FFEFD9', robe: '#3A2208' },
+  spades:   { ink: '#4B32C0', deep: '#2E1C88', soft: '#E6E1FF', robe: '#1A1436' },
+  clubs:    { ink: '#17A05C', deep: '#0E6B3D', soft: '#DDF7E9', robe: '#0C2418' },
 };
 
-// ── SVG Suit Icons ────────────────────────────────────────────────────────────
-// Paths extracted from vecteezy_card-suits-icon-set-with-gold-border_8312600.svg
-// Each suit is isolated via viewBox from the 4000×4000 source canvas.
+const PATHS: Record<string, string> = {
+  hearts:  'M12 20.9 4.1 13a5.2 5.2 0 0 1 7.3-7.4l.6.6.6-.6A5.2 5.2 0 0 1 19.9 13z',
+  diamonds:'M12 2.2 21.2 12 12 21.8 2.8 12z',
+  spades:  'M12 2.2C12 2.2 4.1 8.4 4.1 13.2a4.7 4.7 0 0 0 7.3 3.9c-.3 2-1.2 3.5-2.4 4.4h6a6.4 6.4 0 0 1-2.4-4.4 4.7 4.7 0 0 0 7.3-3.9c0-4.8-7.9-11-7.9-11z',
+  clubs:   'M12 2.1a4.1 4.1 0 0 0-2.7 7.2A4.1 4.1 0 1 0 7 16.8a4 4 0 0 0 3.4-1.9c-.2 2.1-1.1 3.7-2.3 4.6h7.8c-1.2-.9-2.1-2.5-2.3-4.6a4 4 0 0 0 3.4 1.9 4.1 4.1 0 1 0-2.3-7.5A4.1 4.1 0 0 0 12 2.1z',
+};
 
-function SuitIcon({ suit, size, color, style }: {
-  suit: string; size: number; color: string; style?: { filter?: string };
-}) {
-  switch (suit) {
-    case 'hearts':
-      // Top-left quadrant of source: x 235–2066, y 264–1809
-      return (
-        <svg width={size} height={size} viewBox="235 264 1832 1545" style={style}>
-          <path fill={color} d="M 1893.53125 409.800781 C 1799.539062 315.828125 1674.589844 264.078125 1541.691406 264.078125 C 1408.789062 264.078125 1283.839844 315.828125 1189.851562 409.800781 L 1150.71875 448.929688 L 1111.601562 409.800781 C 1017.628906 315.828125 892.65625 264.078125 759.753906 264.078125 C 626.855469 264.078125 501.90625 315.828125 407.941406 409.800781 C 277.855469 539.878906 234.988281 724.621094 279.332031 890.710938 C 288.183594 923.828125 300.480469 956.230469 316.273438 987.300781 C 339.390625 1032.820312 369.9375 1075.46875 407.941406 1113.480469 L 1069.570312 1775.140625 C 1091.269531 1796.800781 1120.070312 1808.738281 1150.71875 1808.738281 C 1181.378906 1808.738281 1210.199219 1796.800781 1231.871094 1775.140625 L 1893.53125 1113.480469 C 1931.539062 1075.46875 1962.078125 1032.820312 1985.199219 987.300781 C 2000.988281 956.230469 2013.289062 923.828125 2022.140625 890.710938 C 2066.460938 724.621094 2023.589844 539.878906 1893.53125 409.800781 Z" />
-        </svg>
-      );
-    case 'diamonds':
-      // Bottom-right quadrant of source: x 2397–3616, y 2285–3644
-      return (
-        <svg width={size} height={size} viewBox="2395 2283 1222 1363" style={style}>
-          <path fill={color} d="M 3003.78125 3643.539062 L 2398.980469 2968.339844 C 2397.441406 2966.621094 2397.441406 2964.011719 2398.980469 2962.28125 L 3003.78125 2287.089844 C 3005.578125 2285.070312 3008.738281 2285.070312 3010.539062 2287.089844 L 3615.339844 2962.28125 C 3616.878906 2964.011719 3616.878906 2966.621094 3615.339844 2968.339844 L 3010.539062 3643.539062 C 3008.738281 3645.550781 3005.578125 3645.550781 3003.78125 3643.539062 Z" />
-        </svg>
-      );
-    case 'spades':
-      // Bottom-left quadrant of source: x 426–1875, y 2301–3619
-      return (
-        <svg width={size} height={size} viewBox="426 2301 1450 1318" style={style}>
-          <path fill={color} d="M 1740.640625 2889.25 L 1637.46875 2786.089844 L 1154.980469 2303.589844 C 1152.691406 2301.308594 1148.980469 2301.308594 1146.691406 2303.589844 L 664.199219 2786.089844 L 561.03125 2889.25 C 426.652344 3023.628906 426.652344 3241.511719 561.03125 3375.890625 C 695.414062 3510.269531 913.289062 3510.269531 1047.671875 3375.890625 L 1094.949219 3328.609375 C 1102.019531 3321.539062 1113.488281 3329.859375 1109 3338.789062 C 1063.648438 3428.960938 1024.761719 3521.089844 951.679688 3610.058594 C 948.507812 3613.910156 950.074219 3618.71875 954.597656 3618.71875 C 1085.421875 3618.71875 1216.25 3618.71875 1347.078125 3618.71875 C 1351.601562 3618.71875 1353.160156 3613.921875 1349.988281 3610.058594 C 1276.910156 3521.089844 1238.019531 3428.960938 1192.671875 3338.789062 C 1188.179688 3329.859375 1199.648438 3321.539062 1206.71875 3328.609375 L 1254 3375.890625 C 1388.378906 3510.269531 1606.261719 3510.269531 1740.640625 3375.890625 C 1875.019531 3241.511719 1875.019531 3023.628906 1740.640625 2889.25 Z" />
-        </svg>
-      );
-    case 'clubs':
-      // Top-right quadrant of source: x 2378–3636, y 367–1704
-      return (
-        <svg width={size} height={size} viewBox="2378 367 1258 1338" style={style}>
-          <path fill={color} d="M 3631.53125 1220.101562 C 3629.28125 1052.628906 3493.179688 915.589844 3325.71875 912.25 C 3285.160156 911.441406 3246.328125 918.378906 3210.578125 931.679688 C 3206.019531 933.371094 3202.621094 927.460938 3206.371094 924.351562 C 3274.460938 867.859375 3318.171875 782.988281 3319.339844 687.871094 C 3321.429688 516.5 3182.96875 374.199219 3011.609375 371.808594 C 2837.148438 369.378906 2694.960938 510.078125 2694.960938 683.980469 C 2694.960938 780.710938 2738.949219 867.140625 2808.019531 924.410156 C 2811.75 927.5 2808.308594 933.378906 2803.78125 931.691406 C 2768.03125 918.390625 2729.179688 911.449219 2688.621094 912.25 C 2521.160156 915.578125 2385.050781 1052.601562 2382.789062 1220.058594 C 2380.429688 1394.46875 2521.089844 1536.589844 2694.960938 1536.589844 C 2793.578125 1536.589844 2881.5 1490.851562 2938.699219 1419.429688 C 2944.019531 1412.789062 2954.679688 1417.769531 2952.921875 1426.089844 C 2936.480469 1504.140625 2904.78125 1579.050781 2858.730469 1646.160156 C 2848.140625 1661.601562 2836.691406 1676.96875 2824.148438 1692.238281 C 2821.230469 1695.78125 2822.671875 1700.199219 2826.828125 1700.199219 C 2947.050781 1700.199219 3067.269531 1700.199219 3187.488281 1700.199219 C 3191.640625 1700.199219 3193.078125 1695.789062 3190.171875 1692.238281 C 3177.628906 1676.96875 3166.179688 1661.601562 3155.589844 1646.160156 C 3109.539062 1579.050781 3077.839844 1504.128906 3061.390625 1426.089844 C 3059.640625 1417.769531 3070.300781 1412.789062 3075.621094 1419.429688 C 3132.808594 1490.851562 3220.730469 1536.589844 3319.359375 1536.589844 C 3493.210938 1536.589844 3633.871094 1394.488281 3631.53125 1220.101562 Z" />
-        </svg>
-      );
-    default:
-      return null;
-  }
+function Pip({ suit, size, color, shadow }: { suit: string; size: number; color: string; shadow?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" style={{ display: 'block' }} aria-hidden="true">
+      {/* Hard contact shadow in a darker sibling hue — never grey. */}
+      {shadow && <path d={PATHS[suit]} fill={shadow} transform="translate(0,1.1)" />}
+      <path d={PATHS[suit]} fill={color} />
+      {/* One soft top-left specular blob. Never a rim sweep — that reads as glass. */}
+      <path d={PATHS[suit]} fill="rgba(255,255,255,.34)" transform="translate(-.35,-.7) scale(.995)"
+            style={{ clipPath: 'inset(0 45% 55% 0)' }} />
+    </svg>
+  );
 }
 
-const isFace = (rank: string) => ['J', 'Q', 'K'].includes(rank);
+/* ── Court cards ───────────────────────────────────────────────────────────
+   Figures supplied as SVG and recoloured per suit at render time.
 
-const faceEmoji: Record<string, Record<string, string>> = {
-  J: { hearts: '🤴', diamonds: '🤴', spades: '🗡️', clubs: '🗡️' },
-  Q: { hearts: '👸', diamonds: '👸', spades: '👑', clubs: '👑' },
-  K: { hearts: '🤴', diamonds: '🤴', spades: '⚔️', clubs: '⚔️' },
-};
+   Three adjustments were needed to make them safe as components:
+     - the Jack shipped with a full-bleed #262626 background rect, which would
+       have painted over the card face; dropped.
+     - all three shared a `.o` CSS class for the outline. A <style> block inside
+       a component is document-global, so with several courts on screen (and
+       multiple decks in a 6+ player game) they would all fight over one class
+       name. The outline is inline attributes instead.
+     - the artwork is 512x800 (0.64, the bridge-card ratio) while our cards are
+       0.714, so the figure is sized off card *height* and centred.            */
 
-// ── Card component ────────────────────────────────────────────────────────────
+const GOLD = '#F2C94C';
+const LINE = '#000';
 
-export function Card({ card, faceUp = true, selected = false, playable = true, onClick, size = 'md', glowColor, dealDelay }: CardProps) {
+/** Shared outline, replacing the original `.o` class. */
+const O = {
+  stroke: LINE, strokeWidth: 14, strokeLinejoin: 'round', strokeLinecap: 'round',
+} as const;
+
+function CourtFigure({ rank, suit, height }: { rank: string; suit: string; height: number }) {
+  const c = SUIT[suit] ?? SUIT.spades;
+  const width = height * (512 / 800);
+
+  // Common to all three: face, eyes, smile, gown, tabard.
+  const face = (cy: number, eyeY: number, smileY: number) => (
+    <>
+      <circle {...O} cx="256" cy={cy} r="95" fill="#fff" />
+      <circle cx="225" cy={eyeY} r="12" />
+      <circle cx="287" cy={eyeY} r="12" />
+      <path d={`M220 ${smileY} Q256 ${smileY + 25} 292 ${smileY}`}
+        fill="none" stroke={LINE} strokeWidth="10" strokeLinecap="round" />
+    </>
+  );
+
+  const gown = (
+    <>
+      <path {...O} fill={c.robe} d="M110 390 L402 390 L460 730 L52 730 Z" />
+      <path fill={c.ink} d="M195 405 L317 405 L290 700 L222 700 Z" />
+    </>
+  );
+
+  return (
+    <svg width={width} height={height} viewBox="0 0 512 800"
+      aria-hidden="true" style={{ display: 'block', overflow: 'visible' }}>
+      {rank === 'K' && (
+        <>
+          <path {...O} fill={c.ink} d="M110 205 L160 80 L200 130 L235 60 L277 130 L312 60 L352 130 L402 205 Z" />
+          <path {...O} fill={GOLD} d="M150 90 L362 90 L382 125 L130 125 Z" />
+          {face(285, 265, 315)}
+          {gown}
+          {/* sceptre */}
+          <path {...O} fill="#DDD" d="M385 165 L395 165 L395 355 L385 355 Z" />
+          <path {...O} fill={GOLD} d="M372 160 L408 160 L390 130 Z" />
+        </>
+      )}
+
+      {rank === 'Q' && (
+        <>
+          <path {...O} fill={c.ink} d="M110 205 L160 80 L205 140 L256 70 L307 140 L352 80 L402 205 Z" />
+          <path {...O} fill={GOLD} d="M150 90 L362 90 L382 125 L130 125 Z" />
+          {face(285, 265, 315)}
+          {gown}
+          {/* pearls on the crown points */}
+          <circle cx="160" cy="78" r="10" fill={GOLD} />
+          <circle cx="256" cy="68" r="10" fill={GOLD} />
+          <circle cx="352" cy="78" r="10" fill={GOLD} />
+        </>
+      )}
+
+      {rank === 'J' && (
+        <>
+          <path {...O} fill={c.ink}
+            d="M80 200 L140 60 L372 60 L432 200 L360 200 C340 140 300 110 256 110 C212 110 172 140 152 200 Z" />
+          <path {...O} fill={GOLD} d="M160 70 L352 70 L380 110 L132 110 Z" />
+          {face(290, 270, 320)}
+          {gown}
+        </>
+      )}
+    </svg>
+  );
+}
+
+const isCourt = (r: string) => r === 'J' || r === 'Q' || r === 'K';
+
+export function Card({
+  card, faceUp = true, selected = false, playable = true, onClick,
+  size = 'md', glowColor, dealDelay, bobIndex = 0, inert = false,
+}: CardProps) {
   const d = {
-    sm: { w: 64,  h: 90,  rank: 13, corner: 9,  pip: 9,  center: 22 },
-    md: { w: 84,  h: 118, rank: 16, corner: 11, pip: 13, center: 28 },
-    lg: { w: 110, h: 154, rank: 20, corner: 14, pip: 16, center: 36 },
+    // `court` is the figure's HEIGHT — the artwork is 512x800, taller than the
+    // card is, so height is the binding dimension. ~62% of the card leaves the
+    // corner indices clear.
+    sm: { w: 64,  h: 90,  rank: 15, pip: 10, court: 56, center: 26, r: 10, bw: 2.5 },
+    md: { w: 84,  h: 118, rank: 19, pip: 12, court: 73, center: 34, r: 13, bw: 3 },
+    lg: { w: 110, h: 154, rank: 25, pip: 16, court: 96, center: 44, r: 16, bw: 3.5 },
   }[size];
 
-  const sc = suitColors[card.suit];
+  const sc = SUIT[card.suit] ?? SUIT.spades;
   const isMindi = card.rank === '10';
 
-  // ── Card back ──────────────────────────────────────────────────────────────
+  const ref = useRef<HTMLDivElement>(null);
+  const raf = useRef<number | null>(null);
+  const pending = useRef<{ x: number; y: number } | null>(null);
+  const [pressed, setPressed] = useState(false);
+  const [nudging, setNudging] = useState(false);
+  const [hovered, setHovered] = useState(false);
+
+  const interactive = !inert && faceUp;
+
+  /* ── Pointer tilt. The handler only stores coordinates; a single rAF does
+        the write, so pointermove firing faster than the display never causes
+        more than one style write per frame. ── */
+  const flush = useCallback(() => {
+    raf.current = null;
+    const el = ref.current;
+    const p = pending.current;
+    if (!el || !p) return;
+    const MAX = 11;
+    // rotateY follows cursor X; rotateX is the NEGATIVE of cursor Y, because
+    // positive rotateX tips the top away from the viewer.
+    el.style.setProperty('--u-ry', `${(p.x - 0.5) * 2 * MAX}deg`);
+    el.style.setProperty('--u-rx', `${(p.y - 0.5) * -2 * MAX}deg`);
+    el.style.setProperty('--u-gx', `${p.x * 100}%`);
+    el.style.setProperty('--u-gy', `${p.y * 100}%`);
+  }, []);
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!interactive || !playable || prefersReduced()) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    pending.current = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+    if (raf.current == null) raf.current = requestAnimationFrame(flush);
+  }, [interactive, playable, flush]);
+
+  const resetTilt = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.setProperty('--u-ry', '0deg');
+    el.style.setProperty('--u-rx', '0deg');
+  }, []);
+
+  useEffect(() => () => { if (raf.current != null) cancelAnimationFrame(raf.current); }, []);
+
+  const handleEnter = () => {
+    if (!interactive) return;
+    setHovered(true);
+    if (playable) Sounds.cardSelect();
+  };
+  const handleLeave = () => {
+    setHovered(false);
+    setPressed(false);
+    resetTilt();
+  };
+
+  const handleClick = () => {
+    if (!interactive) return;
+    if (!playable) {
+      // Say no clearly: a nudge, a flat buzz, and a short buzz on the phone.
+      setNudging(true);
+      Sounds.invalid();
+      haptic([14, 40, 14]);
+      window.setTimeout(() => setNudging(false), 440);
+      return;
+    }
+    haptic(11);
+    onClick?.();
+  };
+
+  /* ── Card back ─────────────────────────────────────────────────────────── */
   if (!faceUp) {
     return (
-      <div onClick={onClick} style={{ width: d.w, height: d.h }} className="cursor-pointer transition-transform duration-200 hover:scale-105">
-        <div className="w-full h-full rounded-lg relative overflow-hidden" style={{
-          background: 'linear-gradient(145deg, #3b0a0a 0%, #5c1a1a 40%, #4a1010 100%)',
-          boxShadow: '0 4px 16px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08)',
-          border: '1px solid rgba(212,168,67,0.25)',
+      <div style={{ width: d.w, height: d.h }} onClick={onClick}
+        className={inert ? '' : 'cursor-pointer transition-transform duration-200 hover:scale-105'}>
+        <div style={{
+          width: '100%', height: '100%', borderRadius: d.r, position: 'relative', overflow: 'hidden',
+          background: 'linear-gradient(160deg, #7B5CFF 0%, #5B37B0 52%, #40287F 100%)',
+          border: `${d.bw}px solid #FFFFFF`,
+          boxShadow: '0 3px 0 rgba(52,36,110,.75), 0 8px 18px rgba(30,16,60,.4)',
         }}>
-          <div className="absolute inset-[3px] rounded-md" style={{ border: '1px solid rgba(212,168,67,0.2)' }}>
-            <div className="absolute inset-[3px] rounded" style={{ border: '1px solid rgba(212,168,67,0.1)' }} />
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="relative">
-              <div className="w-5 h-5 rotate-45" style={{ border: '1.5px solid rgba(212,168,67,0.4)' }} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-2.5 h-2.5 rotate-45" style={{ border: '1px solid rgba(212,168,67,0.25)', background: 'rgba(212,168,67,0.08)' }} />
-              </div>
-            </div>
-          </div>
-          <div className="absolute top-2 left-2 w-1 h-1 rounded-full" style={{ background: 'rgba(212,168,67,0.4)' }} />
-          <div className="absolute bottom-2 right-2 w-1 h-1 rounded-full" style={{ background: 'rgba(212,168,67,0.4)' }} />
+          {/* Ganjifa-style plain back with a rangoli dot grid — instantly Indian,
+              legible at 60px, and no pattern to fight the face cards. */}
+          <div style={{
+            position: 'absolute', inset: 5, borderRadius: d.r - 5,
+            backgroundImage: 'radial-gradient(circle at center, rgba(255,255,255,.55) 1.1px, transparent 1.1px)',
+            backgroundSize: `${Math.round(d.w / 6)}px ${Math.round(d.w / 6)}px`,
+            opacity: .8,
+          }} />
+          <div style={{
+            position: 'absolute', inset: 0,
+            background: 'linear-gradient(150deg, rgba(255,255,255,.26), transparent 46%)',
+          }} />
         </div>
       </div>
     );
   }
 
-  const face = isFace(card.rank);
+  /* ── Card face ─────────────────────────────────────────────────────────── */
+  // Shipped trick-takers lift a highlighted card 18-35% of its own height;
+  // 14px on a 90px card was under that band and read as a twitch.
+  const lift = selected ? -Math.round(d.h * 0.30) : hovered && playable ? -Math.round(d.h * 0.22) : 0;
+  const scale = pressed ? 0.96 : selected ? 1.09 : hovered && playable ? 1.06 : 1;
+  const scaleY = pressed ? 0.92 : 1;
+
+  const corner = (
+    <>
+      <span style={{
+        fontFamily: "'Baloo 2', system-ui, sans-serif", fontWeight: 800,
+        fontSize: d.rank, lineHeight: .92, color: sc.ink,
+        textShadow: `0 1px 0 ${sc.deep}30`,
+      }}>{card.rank}</span>
+      <Pip suit={card.suit} size={d.pip} color={sc.ink} />
+    </>
+  );
 
   return (
     <div
-      onClick={playable ? onClick : undefined}
+      ref={ref}
+      role="button"
+      tabIndex={interactive ? 0 : -1}
+      aria-label={`${card.rank} of ${card.suit}${playable ? '' : ', not playable'}`}
+      aria-disabled={!playable}
+      onPointerEnter={handleEnter}
+      onPointerLeave={handleLeave}
+      onPointerMove={onPointerMove}
+      onPointerDown={() => interactive && playable && setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onClick={handleClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleClick(); } }}
+      className={nudging ? 'u-anim-nudge' : undefined}
       style={{
         width: d.w,
         height: d.h,
-        cursor: playable ? 'pointer' : 'default',
-        transform: selected ? 'translateY(-20px) scale(1.08)' : undefined,
-        transition: 'all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1)',
-        filter: !playable ? 'brightness(0.45) saturate(0.3) grayscale(0.3)' : undefined,
-        animationDelay: dealDelay ? `${dealDelay}ms` : undefined,
+        position: 'relative',
+        perspective: 620,
+        cursor: interactive ? (playable ? 'pointer' : 'not-allowed') : 'default',
+        outline: 'none',
+        WebkitTapHighlightColor: 'transparent',
+        touchAction: 'manipulation',
+        // Idle bob: playable cards breathe out of phase so the hand never
+        // looks like a static row of rectangles.
+        animation: interactive && playable && !selected && dealDelay == null
+          ? `u-bob ${3.1 + (bobIndex % 5) * 0.22}s ease-in-out ${(bobIndex % 7) * 0.19}s infinite`
+          : undefined,
+        // @ts-expect-error custom property consumed by the u-bob keyframes
+        '--u-bob-y': '-4px',
       }}
-      className={`group relative ${dealDelay != null ? 'animate-card-deal' : ''} ${playable ? 'hover:-translate-y-2 hover:scale-105' : ''}`}
     >
-      {/* Glow for playable */}
-      {playable && glowColor && (
-        <div className="absolute -inset-2 rounded-xl opacity-40 animate-gold-pulse" style={{ background: glowColor, filter: 'blur(10px)', zIndex: -1 }} />
-      )}
-
-      {/* Card face */}
-      <div className="absolute inset-0 rounded-lg overflow-hidden" style={{
-        background: isMindi
-          ? 'linear-gradient(170deg, #fffdf5 0%, #fef3c7 30%, #fde68a 100%)'
-          : 'linear-gradient(170deg, #fffef8 0%, #faf8f0 40%, #f5f0e4 100%)',
-        boxShadow: selected
-          ? '0 10px 35px rgba(0,0,0,0.5), 0 0 20px rgba(212,168,67,0.4)'
-          : '0 2px 6px rgba(0,0,0,0.2), 0 6px 20px rgba(0,0,0,0.12)',
-        border: selected ? '2px solid rgba(212,168,67,0.7)' : isMindi ? '1.5px solid rgba(212,168,67,0.4)' : '1px solid rgba(0,0,0,0.08)',
-      }}>
-        {/* Corner filigree */}
-        <div className="absolute top-[1px] left-[1px] w-4 h-4 pointer-events-none" style={{
-          borderTop: '1px solid rgba(212,168,67,0.2)', borderLeft: '1px solid rgba(212,168,67,0.2)', borderTopLeftRadius: 6,
-        }} />
-        <div className="absolute bottom-[1px] right-[1px] w-4 h-4 pointer-events-none" style={{
-          borderBottom: '1px solid rgba(212,168,67,0.2)', borderRight: '1px solid rgba(212,168,67,0.2)', borderBottomRightRadius: 6,
-        }} />
-
-        {/* Top-left corner: rank + suit icon */}
-        <div className="absolute top-[3px] left-[4px] flex flex-col items-center leading-none select-none" style={{ gap: 1 }}>
-          <span style={{ fontSize: d.rank, color: sc.main, fontWeight: 800, lineHeight: 1, fontFamily: "'Cinzel', serif" }}>
-            {card.rank}
-          </span>
-          <SuitIcon suit={card.suit} size={d.corner} color={sc.main} />
-        </div>
-
-        {/* Bottom-right corner: rotated rank + suit icon */}
-        <div className="absolute bottom-[3px] right-[4px] flex flex-col items-center leading-none select-none rotate-180" style={{ gap: 1 }}>
-          <span style={{ fontSize: d.rank, color: sc.main, fontWeight: 800, lineHeight: 1, fontFamily: "'Cinzel', serif" }}>
-            {card.rank}
-          </span>
-          <SuitIcon suit={card.suit} size={d.corner} color={sc.main} />
-        </div>
-
-        {/* Center area: pips, face, or ace */}
-        <div className="absolute inset-0 pointer-events-none">
-          {card.rank === 'A' ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <SuitIcon
-                suit={card.suit}
-                size={Math.round(d.center * 1.5)}
-                color={sc.main}
-                style={{ filter: `drop-shadow(0 1px 3px ${sc.accent})` }}
-              />
-            </div>
-          ) : face ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span style={{ fontSize: d.center * 0.85 }}>{faceEmoji[card.rank]?.[card.suit] || '👤'}</span>
-              <span style={{ fontSize: d.center * 0.5, color: sc.main, fontFamily: "'Cinzel', serif", fontWeight: 700, lineHeight: 1, marginTop: 2 }}>
-                {card.rank}
-              </span>
-            </div>
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <SuitIcon
-                suit={card.suit}
-                size={Math.round(d.center * 1.1)}
-                color={sc.main}
-                style={{ filter: `drop-shadow(0 1px 3px ${sc.accent})` }}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Mindi shimmer */}
-        {isMindi && (
-          <div className="absolute inset-0 rounded-lg pointer-events-none" style={{
-            background: 'linear-gradient(135deg, transparent 30%, rgba(212,168,67,0.1) 50%, transparent 70%)',
+      <div
+        style={{
+          width: '100%', height: '100%', position: 'relative',
+          transform: `translateY(${lift}px) scale(${scale}) scaleY(${scaleY})
+                      rotateX(var(--u-rx, 0deg)) rotateY(var(--u-ry, 0deg))`,
+          transition: pressed
+            ? 'transform 80ms cubic-bezier(.22,1,.36,1)'
+            : 'transform 240ms cubic-bezier(.34,1.56,.64,1)',
+          transformStyle: 'preserve-3d',
+          willChange: hovered || selected || pressed ? 'transform' : undefined,
+          filter: !playable && interactive ? 'saturate(.35) brightness(.82)' : undefined,
+          animation: dealDelay != null ? `u-drop-in .42s cubic-bezier(.34,1.56,.64,1) ${dealDelay}ms both` : undefined,
+        }}
+      >
+        {/* Glow behind a playable card. A soft box-shadow, not a blur filter —
+            13 blur passes a frame is what the old version was paying for. */}
+        {playable && glowColor && !selected && (
+          <div style={{
+            position: 'absolute', inset: -3, borderRadius: d.r + 3,
+            boxShadow: `0 0 14px 3px ${glowColor}`, pointerEvents: 'none',
           }} />
         )}
 
-        {/* Selected border */}
-        {selected && (
-          <div className="absolute inset-0 rounded-lg pointer-events-none animate-border-glow-gold" style={{
-            border: '2px solid rgba(212,168,67,0.7)',
-            boxShadow: 'inset 0 0 12px rgba(212,168,67,0.15)',
+        {/* ── the card ── */}
+        <div style={{
+          position: 'absolute', inset: 0, borderRadius: d.r, overflow: 'hidden',
+          background: isMindi
+            ? 'linear-gradient(168deg,#FFFDF2 0%,#FFF0BE 48%,#FFE28A 100%)'
+            : '#FFFFFF',
+          border: `${d.bw}px solid ${sc.ink}`,
+          boxShadow: selected
+            ? `0 8px 0 ${sc.deep}, 0 16px 26px rgba(30,16,60,.42), 0 0 0 3px rgba(255,201,60,.85)`
+            : hovered && playable
+              ? `0 6px 0 ${sc.deep}, 0 12px 22px rgba(30,16,60,.34)`
+              : `0 3px 0 ${sc.deep}, 0 6px 12px rgba(30,16,60,.24)`,
+          transition: 'box-shadow 200ms cubic-bezier(.22,1,.36,1)',
+        }}>
+          {/* broad top specular — the moulded-plastic read */}
+          <div style={{
+            position: 'absolute', top: 2, left: 4, right: 4, height: '26%',
+            borderRadius: 999, background: 'rgba(255,255,255,.72)',
+            opacity: isMindi ? .5 : .34, pointerEvents: 'none',
           }} />
+
+          {/* corners */}
+          <div style={{ position: 'absolute', top: 4, left: 5, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, lineHeight: .85 }}>
+            {corner}
+          </div>
+          <div style={{ position: 'absolute', bottom: 4, right: 5, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, lineHeight: .85, transform: 'rotate(180deg)' }}>
+            {corner}
+          </div>
+
+          {/* centre */}
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+            {isCourt(card.rank)
+              ? <CourtFigure rank={card.rank} suit={card.suit} height={d.court} />
+              : <Pip suit={card.suit} size={card.rank === 'A' ? d.center * 1.32 : d.center} color={sc.ink} shadow={`${sc.deep}55`} />}
+          </div>
+
+          {/* Mindi tens are the whole point of the game — they get a marigold
+              ring and a shine that sweeps on hover. */}
+          {isMindi && (
+            <>
+              <div style={{
+                position: 'absolute', inset: 0, borderRadius: d.r - d.bw,
+                border: '2px solid rgba(255,201,60,.9)', pointerEvents: 'none',
+              }} />
+              <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+                <div style={{
+                  position: 'absolute', top: 0, bottom: 0, width: '46%',
+                  background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.85), transparent)',
+                  animation: `u-shine-sweep ${hovered ? 1.1 : 4.4}s ease-in-out infinite`,
+                }} />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Selected: a marigold chevron above the card saying "this one goes". */}
+        {selected && (
+          <div style={{
+            position: 'absolute', top: -18, left: '50%', transform: 'translateX(-50%)',
+            pointerEvents: 'none',
+          }} className="u-anim-breathe">
+            <svg width="20" height="12" viewBox="0 0 20 12" aria-hidden="true">
+              <path d="M10 0 20 12 0 12z" fill="#FFC93C" stroke="#C98A00" strokeWidth="1.4" strokeLinejoin="round" />
+            </svg>
+          </div>
         )}
       </div>
     </div>

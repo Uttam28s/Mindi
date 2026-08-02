@@ -23,6 +23,24 @@ import {
   applyBandHukum,
   revealBandHukum,
 } from '../../server/src/engine/gameEngine';
+import {
+  validateCreateRoom,
+  validateJoinRoom,
+  validateCardId,
+  validateSeatIndex,
+  cleanName,
+} from './validate';
+
+/**
+ * A room needs this many real people before it can start.
+ *
+ * Rooms exist for playing with other humans; solo-vs-AI has its own local path
+ * and never reaches this Durable Object. Without this floor a host could fill
+ * every other seat with AI and play alone behind a room code — and because
+ * `aiSlots` arrives from the client, that has to be enforced here rather than
+ * in the lobby UI.
+ */
+const MIN_HUMANS = 2;
 
 export interface RoomSeat {
   socketId: string; // connId, or `ai_seat_<n>` for AI seats
@@ -31,12 +49,6 @@ export interface RoomSeat {
   teamId: TeamId;
   isAI?: boolean;
   aiDifficulty?: 'easy' | 'medium' | 'hard';
-}
-
-export interface AiSlotConfig {
-  seatIndex: number;
-  name: string;
-  difficulty: 'easy' | 'medium' | 'hard';
 }
 
 export interface Room {
@@ -49,6 +61,8 @@ export interface Room {
   gameState: GameState | null;
   phase: 'lobby' | 'playing' | 'round_end' | 'game_over';
   createdAt: number;
+  /** Updated on every successful mutation; drives garbage collection. */
+  lastActivityAt: number;
   teamIds?: TeamId[];
   /** Was `(room as any)._lastRoundResult` on Render; now a real persisted field. */
   lastRoundResult?: { winnerTeamId: TeamId; category: 'normal' | 'mendikot' | 'whitewash' };
@@ -58,23 +72,90 @@ interface Attachment {
   connId: string;
 }
 
-/** Strip private hands — a player only ever receives their own cards. */
-function publicState(state: GameState): Omit<GameState, 'players'> & { players: Omit<Player, 'hand'>[] } {
+type PublicGameState = Omit<GameState, 'players' | 'round'> & {
+  players: Omit<Player, 'hand'>[];
+  round: Omit<GameState['round'], 'trumpCard'>;
+};
+
+/**
+ * Strip everything a client must not see:
+ *  - players[].hand — a player only ever receives their own cards.
+ *  - round.trumpCard — the concealed band hukum nomination. types.ts marks this
+ *    "server only"; spreading `state` used to ship it to every client, which
+ *    defeated the entire band hukum mechanic.
+ */
+function publicState(state: GameState): PublicGameState {
+  const { trumpCard: _trumpCard, ...round } = state.round;
   return {
     ...state,
+    round,
     players: state.players.map(({ hand: _hand, ...rest }) => rest),
   };
 }
 
 const LOBBY_TTL_MS = 30 * 60 * 1000;
+/** An in-progress game abandoned for this long is garbage. */
+const GAME_TTL_MS = 6 * 60 * 60 * 1000;
+/** How often the GC alarm re-checks. */
+const GC_INTERVAL_MS = 30 * 60 * 1000;
+
+/** Largest client frame we will parse. Real messages are a few hundred bytes. */
+const MAX_MESSAGE_BYTES = 8 * 1024;
+/** Token bucket: short bursts are fine, sustained flooding is not. */
+const RL_BURST = 25;
+const RL_REFILL_PER_SEC = 3;
+/** Misbehaviours tolerated before the socket is closed. */
+const MAX_STRIKES = 5;
+
+interface Bucket {
+  tokens: number;
+  ts: number;
+}
 
 export class MindiRoom {
   private ctx: DurableObjectState;
   private room: Room | null = null;
   private loaded = false;
 
+  /**
+   * Rate-limit state is intentionally in-memory rather than persisted: writing
+   * it would itself consume the DO storage budget we are trying to protect.
+   * Hibernation clears it, but hibernation only happens after a quiet period —
+   * a client flooding us keeps the object awake, so the limiter is live exactly
+   * when it is needed.
+   */
+  private buckets = new Map<string, Bucket>();
+  private strikes = new Map<string, number>();
+
   constructor(ctx: DurableObjectState, _env: unknown) {
     this.ctx = ctx;
+  }
+
+  /** Token bucket. Returns false when the connection is over budget. */
+  private allow(connId: string): boolean {
+    const now = Date.now();
+    const b = this.buckets.get(connId) ?? { tokens: RL_BURST, ts: now };
+    b.tokens = Math.min(RL_BURST, b.tokens + ((now - b.ts) / 1000) * RL_REFILL_PER_SEC);
+    b.ts = now;
+    if (b.tokens < 1) {
+      this.buckets.set(connId, b);
+      return false;
+    }
+    b.tokens -= 1;
+    this.buckets.set(connId, b);
+    return true;
+  }
+
+  /** Records a misbehaviour; true once the socket should be closed. */
+  private strike(connId: string): boolean {
+    const n = (this.strikes.get(connId) ?? 0) + 1;
+    this.strikes.set(connId, n);
+    return n >= MAX_STRIKES;
+  }
+
+  private forget(connId: string): void {
+    this.buckets.delete(connId);
+    this.strikes.delete(connId);
   }
 
   // ── Persistence ────────────────────────────────────────────────────
@@ -87,7 +168,11 @@ export class MindiRoom {
   }
 
   private async save(): Promise<void> {
-    if (this.room) await this.ctx.storage.put('room', this.room);
+    if (!this.room) return;
+    // Every mutation refreshes the clock the GC alarm reads, at no extra cost
+    // since we are already writing.
+    this.room.lastActivityAt = Date.now();
+    await this.ctx.storage.put('room', this.room);
   }
 
   // ── Connection plumbing ────────────────────────────────────────────
@@ -136,9 +221,28 @@ export class MindiRoom {
     }
   }
 
+  /**
+   * True when this connection currently occupies a seat.
+   *
+   * SECURITY: a socket is accepted before it has joined (the client connects,
+   * then sends create_room/join_room), so "connected" must never be treated as
+   * "is a player". Everything that reveals or mutates game state gates on this.
+   */
+  private isSeated(connId: string): boolean {
+    return !!this.room?.seats.some(s => s?.socketId === connId);
+  }
+
+  /**
+   * Broadcast to seated players only. Previously this fanned out to every
+   * socket returned by getWebSockets(), so anyone who merely knew a room code
+   * could open a connection and watch the whole game unfold.
+   */
   private broadcast(e: string, d: unknown, exceptConnId?: string): void {
     for (const ws of this.ctx.getWebSockets()) {
-      if (exceptConnId && this.connIdOf(ws) === exceptConnId) continue;
+      const id = this.connIdOf(ws);
+      if (!id) continue;
+      if (!this.isSeated(id)) continue;
+      if (exceptConnId && id === exceptConnId) continue;
       this.send(ws, e, d);
     }
   }
@@ -159,6 +263,25 @@ export class MindiRoom {
     const connId = this.connIdOf(ws);
     if (!connId) return;
 
+    // Refuse oversized frames before spending anything on JSON.parse.
+    if (raw.length > MAX_MESSAGE_BYTES) {
+      this.send(ws, 'error', { code: 'MESSAGE_TOO_LARGE', message: 'Message too large' });
+      ws.close(1009, 'message too large');
+      this.forget(connId);
+      return;
+    }
+
+    // Throttle before touching storage — an unthrottled client can otherwise
+    // burn the daily DO write budget and take multiplayer down for everyone.
+    if (!this.allow(connId)) {
+      this.send(ws, 'error', { code: 'RATE_LIMITED', message: 'Slow down' });
+      if (this.strike(connId)) {
+        ws.close(1008, 'rate limit exceeded');
+        this.forget(connId);
+      }
+      return;
+    }
+
     let msg: { e?: string; d?: any };
     try {
       msg = JSON.parse(raw);
@@ -170,13 +293,29 @@ export class MindiRoom {
     await this.load();
     const d = msg.d ?? {};
 
+    // Only these two may be sent by a connection that holds no seat — they are
+    // how a connection acquires one. Everything else requires a seat, so an
+    // unjoined socket cannot mutate or probe game state.
+    if (msg.e !== 'create_room' && msg.e !== 'join_room' && !this.isSeated(connId)) {
+      this.send(ws, 'error', {
+        code: 'NOT_IN_ROOM',
+        message: 'You must join the room before acting',
+      });
+      // A real client never does this, so treat repetition as probing.
+      if (this.strike(connId)) {
+        ws.close(1008, 'not a participant');
+        this.forget(connId);
+      }
+      return;
+    }
+
     switch (msg.e) {
       case 'create_room':       return this.onCreateRoom(ws, connId, d);
       case 'join_room':         return this.onJoinRoom(ws, connId, d);
       case 'rename_player':     return this.onRename(ws, connId, d);
       case 'start_game':        return this.onStartGame(ws, connId);
       case 'set_band_hukum':    return this.onSetBandHukum(ws, connId, d);
-      case 'request_trump_reveal': return this.onRequestTrumpReveal(ws);
+      case 'request_trump_reveal': return this.onRequestTrumpReveal(ws, connId);
       case 'play_card':         return this.onPlayCard(ws, connId, d);
       case 'next_round':        return this.onNextRound(ws, connId);
       case 'ai_play_card':      return this.onAiPlayCard(ws, connId, d);
@@ -197,6 +336,7 @@ export class MindiRoom {
   private async handleLeave(ws: WebSocket): Promise<void> {
     const connId = this.connIdOf(ws);
     if (!connId) return;
+    this.forget(connId);
     await this.load();
     if (!this.room) return;
 
@@ -205,19 +345,21 @@ export class MindiRoom {
 
     this.room.seats[idx] = null;
 
+    // Once no human holds a seat the room is unreachable in EVERY phase, not
+    // just the lobby. This previously only ran for lobbies, so an abandoned
+    // in-progress game leaked its storage permanently.
+    const anyHuman = this.room.seats.some(s => s && !s.isAI);
+    if (!anyHuman) {
+      this.room = null;
+      this.loaded = true;
+      await this.ctx.storage.deleteAll();
+      return;
+    }
+
+    await this.save();
     if (this.room.phase === 'lobby') {
-      // Drop the room entirely once every human seat is empty.
-      const anyHuman = this.room.seats.some(s => s && !s.isAI);
-      if (!anyHuman) {
-        this.room = null;
-        this.loaded = true;
-        await this.ctx.storage.deleteAll();
-        return;
-      }
-      await this.save();
       this.broadcast('player_left', { seatIndex: idx, players: this.lobbyPlayers() });
     } else {
-      await this.save();
       this.broadcast('player_disconnected', { seatIndex: idx });
     }
   }
@@ -258,33 +400,53 @@ export class MindiRoom {
       return this.send(ws, 'error', { code: 'CREATE_FAILED', message: 'No room code reserved' });
     }
 
-    const playerCount = d.playerCount as 4 | 6 | 8 | 10;
-    const seats: (RoomSeat | null)[] = Array(playerCount).fill(null);
-    seats[0] = { socketId: connId, name: d.playerName, seatIndex: 0, teamId: 0 };
+    // Everything below this point is trusted, so nothing above it may be.
+    const checked = validateCreateRoom(d);
+    if (!checked.ok) {
+      return this.send(ws, 'error', { code: 'INVALID_INPUT', message: checked.error });
+    }
+    const { playerName, playerCount, trumpMethod, gamePointsTarget, aiSlots } = checked.value;
 
-    for (const ai of (d.aiSlots ?? []) as AiSlotConfig[]) {
-      if (ai.seatIndex > 0 && ai.seatIndex < playerCount) {
-        seats[ai.seatIndex] = {
-          socketId: `ai_seat_${ai.seatIndex}`,
-          name: ai.name,
-          seatIndex: ai.seatIndex,
-          teamId: (ai.seatIndex % 2) as TeamId,
-          isAI: true,
-          aiDifficulty: ai.difficulty,
-        };
-      }
+    // A room is for playing with other people. Leave space for at least one
+    // more human besides the host, so a room can never be created that is
+    // really a solo game wearing a room code. Solo-vs-AI has its own path and
+    // does not come through here.
+    //
+    // This has to be checked on the server: `aiSlots` arrives from the client,
+    // and a crafted payload could otherwise fill every non-host seat with AI.
+    if (playerCount - 1 - aiSlots.length < MIN_HUMANS - 1) {
+      return this.send(ws, 'error', {
+        code: 'TOO_MANY_AI',
+        message: `Leave at least ${MIN_HUMANS - 1} open seat for another player — rooms need ${MIN_HUMANS} real players.`,
+      });
     }
 
+    const seats: (RoomSeat | null)[] = Array(playerCount).fill(null);
+    seats[0] = { socketId: connId, name: playerName, seatIndex: 0, teamId: 0 };
+
+    for (const ai of aiSlots) {
+      seats[ai.seatIndex] = {
+        socketId: `ai_seat_${ai.seatIndex}`,
+        name: ai.name,
+        seatIndex: ai.seatIndex,
+        teamId: (ai.seatIndex % 2) as TeamId,
+        isAI: true,
+        aiDifficulty: ai.difficulty,
+      };
+    }
+
+    const now = Date.now();
     this.room = {
       code,
       hostSocketId: connId,
       playerCount,
-      trumpMethod: d.trumpMethod,
-      gamePointsTarget: d.gamePointsTarget,
+      trumpMethod,
+      gamePointsTarget,
       seats,
       gameState: null,
       phase: 'lobby',
-      createdAt: Date.now(),
+      createdAt: now,
+      lastActivityAt: now,
     };
     await this.save();
 
@@ -305,12 +467,17 @@ export class MindiRoom {
       return this.send(ws, 'error', { code: 'JOIN_FAILED', message: 'Game already started' });
     }
 
+    const checked = validateJoinRoom(d);
+    if (!checked.ok) {
+      return this.send(ws, 'error', { code: 'INVALID_INPUT', message: checked.error });
+    }
+
     const nextSeat = this.room.seats.findIndex(s => s === null);
     if (nextSeat === -1) return this.send(ws, 'error', { code: 'JOIN_FAILED', message: 'Room is full' });
 
     const seat: RoomSeat = {
       socketId: connId,
-      name: d.playerName,
+      name: checked.value.playerName,
       seatIndex: nextSeat,
       teamId: (nextSeat % 2) as TeamId,
     };
@@ -339,7 +506,7 @@ export class MindiRoom {
     const idx = this.room.seats.findIndex(s => s?.socketId === connId);
     if (idx === -1) return this.send(ws, 'error', { code: 'RENAME_FAILED', message: 'Not in room' });
 
-    const trimmed = String(d.newName ?? '').trim().slice(0, 20);
+    const trimmed = cleanName(d.newName);
     if (!trimmed) return this.send(ws, 'error', { code: 'RENAME_FAILED', message: 'Name cannot be empty' });
 
     this.room.seats[idx]!.name = trimmed;
@@ -356,6 +523,16 @@ export class MindiRoom {
     }
     if (this.room.seats.some(s => s === null)) {
       return this.send(ws, 'error', { code: 'START_FAILED', message: 'Not all players joined' });
+    }
+
+    // Seats being full is not the same as having enough people: AI seats are
+    // filled the moment the room is created. Count the humans separately.
+    const humans = this.room.seats.filter(s => s && !s.isAI).length;
+    if (humans < MIN_HUMANS) {
+      return this.send(ws, 'error', {
+        code: 'NEED_MORE_HUMANS',
+        message: `Waiting for ${MIN_HUMANS - humans} more player${MIN_HUMANS - humans === 1 ? '' : 's'} to join.`,
+      });
     }
 
     // Shuffle players across seats, then alternate teams so no two teammates
@@ -399,8 +576,10 @@ export class MindiRoom {
     this.room.gameState = state;
     this.room.phase = 'playing';
     await this.save();
-    // Lobby TTL no longer applies once the game is live.
-    await this.ctx.storage.deleteAlarm();
+    // The lobby TTL no longer applies, but keep an alarm armed: an abandoned
+    // in-progress game still has to be collected. Deleting the alarm here was
+    // what let orphaned rooms accumulate.
+    await this.ctx.storage.setAlarm(Date.now() + GC_INTERVAL_MS);
 
     this.broadcastRoundState(state, 'game_started');
   }
@@ -410,7 +589,10 @@ export class MindiRoom {
     const seatIndex = this.room.gameState.players.findIndex(p => p.id === connId);
     if (seatIndex === -1) return this.send(ws, 'error', { code: 'NOT_IN_GAME', message: 'Not in game' });
 
-    const { newState, error } = applyBandHukum(this.room.gameState, seatIndex, d.cardId);
+    const card = validateCardId(d.cardId);
+    if (!card.ok) return this.send(ws, 'error', { code: 'INVALID_INPUT', message: card.error });
+
+    const { newState, error } = applyBandHukum(this.room.gameState, seatIndex, card.value);
     if (error) return this.send(ws, 'error', { code: 'INVALID_MOVE', message: error });
 
     this.room.gameState = newState;
@@ -418,9 +600,37 @@ export class MindiRoom {
     this.broadcast('game_state_update', { gameState: publicState(newState) });
   }
 
-  private async onRequestTrumpReveal(ws: WebSocket): Promise<void> {
-    if (!this.room?.gameState) return;
-    const newState = revealBandHukum(this.room.gameState);
+  /**
+   * SECURITY: this previously had no checks whatsoever — any socket, including
+   * one that never joined a seat, could force the hidden trump to be revealed.
+   */
+  private async onRequestTrumpReveal(ws: WebSocket, connId: string): Promise<void> {
+    if (!this.room?.gameState) {
+      return this.send(ws, 'error', { code: 'NO_GAME', message: 'No active game' });
+    }
+
+    const state = this.room.gameState;
+
+    // Must hold a seat in this game.
+    const seatIndex = state.players.findIndex(p => p.id === connId);
+    if (seatIndex === -1) {
+      return this.send(ws, 'error', { code: 'NOT_IN_GAME', message: 'Not in game' });
+    }
+
+    // Only Band Hukum B lets a player choose to reveal; mode A auto-reveals
+    // inside playCard when someone cannot follow suit.
+    if (state.config.trumpMethod !== 'band_hukum_b') {
+      return this.send(ws, 'error', { code: 'NOT_ALLOWED', message: 'Trump cannot be revealed on demand in this mode' });
+    }
+
+    // Only on your own turn — revealing is a move, not a free action.
+    if (state.round.currentTurnSeatIndex !== seatIndex) {
+      return this.send(ws, 'error', { code: 'NOT_YOUR_TURN', message: 'Not your turn' });
+    }
+
+    const { newState, error } = revealBandHukum(state);
+    if (error) return this.send(ws, 'error', { code: 'INVALID_MOVE', message: error });
+
     this.room.gameState = newState;
     await this.save();
     this.broadcast('trump_revealed', {
@@ -433,7 +643,9 @@ export class MindiRoom {
     if (!this.room?.gameState) return this.send(ws, 'error', { code: 'NO_GAME', message: 'No active game' });
     const seatIndex = this.room.gameState.players.findIndex(p => p.id === connId);
     if (seatIndex === -1) return this.send(ws, 'error', { code: 'NOT_IN_GAME', message: 'Not in game' });
-    await this.applyPlay(ws, seatIndex, d.cardId);
+    const card = validateCardId(d.cardId);
+    if (!card.ok) return this.send(ws, 'error', { code: 'INVALID_INPUT', message: card.error });
+    await this.applyPlay(ws, seatIndex, card.value);
   }
 
   private async onAiPlayCard(ws: WebSocket, connId: string, d: any): Promise<void> {
@@ -441,10 +653,15 @@ export class MindiRoom {
     if (this.room.hostSocketId !== connId) {
       return this.send(ws, 'error', { code: 'UNAUTHORIZED', message: 'Only host can play for AI' });
     }
-    if (!this.room.seats[d.seatIndex]?.isAI) {
+    const seat = validateSeatIndex(d.seatIndex, this.room.playerCount);
+    if (!seat.ok) return this.send(ws, 'error', { code: 'INVALID_INPUT', message: seat.error });
+    const card = validateCardId(d.cardId);
+    if (!card.ok) return this.send(ws, 'error', { code: 'INVALID_INPUT', message: card.error });
+
+    if (!this.room.seats[seat.value]?.isAI) {
       return this.send(ws, 'error', { code: 'NOT_AI', message: 'Seat is not an AI' });
     }
-    await this.applyPlay(ws, d.seatIndex, d.cardId);
+    await this.applyPlay(ws, seat.value, card.value);
   }
 
   private async onAiSetBandHukum(ws: WebSocket, connId: string, d: any): Promise<void> {
@@ -452,11 +669,16 @@ export class MindiRoom {
     if (this.room.hostSocketId !== connId) {
       return this.send(ws, 'error', { code: 'UNAUTHORIZED', message: 'Only host can act for AI' });
     }
-    if (!this.room.seats[d.seatIndex]?.isAI) {
+    const seat = validateSeatIndex(d.seatIndex, this.room.playerCount);
+    if (!seat.ok) return this.send(ws, 'error', { code: 'INVALID_INPUT', message: seat.error });
+    const card = validateCardId(d.cardId);
+    if (!card.ok) return this.send(ws, 'error', { code: 'INVALID_INPUT', message: card.error });
+
+    if (!this.room.seats[seat.value]?.isAI) {
       return this.send(ws, 'error', { code: 'NOT_AI', message: 'Seat is not an AI' });
     }
 
-    const { newState, error } = applyBandHukum(this.room.gameState, d.seatIndex, d.cardId);
+    const { newState, error } = applyBandHukum(this.room.gameState, seat.value, card.value);
     if (error) return this.send(ws, 'error', { code: 'INVALID_MOVE', message: error });
 
     this.room.gameState = newState;
@@ -516,6 +738,16 @@ export class MindiRoom {
     if (!this.room || this.room.hostSocketId !== connId) return;
     if (!this.room.gameState || this.room.phase !== 'round_end') return;
 
+    // A mid-game disconnect nulls a seat. The seats.map() below assumes every
+    // entry is present, so without this guard the handler throws a TypeError
+    // server-side instead of reporting a problem.
+    if (this.room.seats.some(s => s === null)) {
+      return this.send(ws, 'error', {
+        code: 'SEAT_EMPTY',
+        message: 'A player left — cannot start the next round',
+      });
+    }
+
     const stored = this.room.lastRoundResult;
     if (!stored) return this.send(ws, 'error', { code: 'NO_RESULT', message: 'No round result stored' });
 
@@ -568,14 +800,28 @@ export class MindiRoom {
     }
   }
 
-  /** Expire a lobby nobody ever started. */
+  /**
+   * Garbage collector. Deletes a room only when nobody is connected AND it has
+   * been idle past its TTL, otherwise re-arms itself. Hibernated sockets are
+   * still reported by getWebSockets(), so a zero count means genuinely nobody
+   * is attached — a live game is never collected out from under its players.
+   */
   async alarm(): Promise<void> {
     await this.load();
     if (!this.room) return;
-    if (this.room.phase === 'lobby' && this.room.createdAt < Date.now() - LOBBY_TTL_MS) {
+
+    const now = Date.now();
+    const ttl = this.room.phase === 'lobby' ? LOBBY_TTL_MS : GAME_TTL_MS;
+    // Fall back to createdAt for rooms persisted before lastActivityAt existed.
+    const idle = now - (this.room.lastActivityAt ?? this.room.createdAt);
+
+    if (this.ctx.getWebSockets().length === 0 && idle > ttl) {
       this.room = null;
       this.loaded = true;
       await this.ctx.storage.deleteAll();
+      return;
     }
+
+    await this.ctx.storage.setAlarm(now + GC_INTERVAL_MS);
   }
 }

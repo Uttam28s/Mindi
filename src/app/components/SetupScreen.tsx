@@ -73,36 +73,36 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
 
   const diffColors: Record<string, { bg: string; b: string; t: string }> = {
     easy: { bg: 'rgba(34,197,94,0.08)', b: 'rgba(34,197,94,0.25)', t: '#22c55e' },
-    medium: { bg: 'rgba(212,168,67,0.08)', b: 'rgba(212,168,67,0.25)', t: '#d4a843' },
+    medium: { bg: 'rgba(255,201,60,0.08)', b: 'rgba(255,201,60,0.25)', t: '#FFC93C' },
     hard: { bg: 'rgba(220,50,50,0.08)', b: 'rgba(220,50,50,0.25)', t: '#dc3232' },
   };
 
   return (
-    <div className="min-h-screen overflow-y-auto" style={{ background: 'linear-gradient(160deg, #1a0505, #2d0a0a, #1e0808)' }}>
+    <div className="min-h-screen overflow-y-auto" style={{ background: 'linear-gradient(178deg,#34246E 0%,#5B37B0 42%,#9B48CE 74%,#DE4FA2 100%)' }}>
       <div className="relative z-10 max-w-2xl mx-auto p-5 pb-10">
         <div className="mb-7">
-          <button onClick={onBack} className="flex items-center gap-2 mb-4" style={{ color: 'rgba(212,168,67,0.4)' }}>
+          <button onClick={onBack} className="flex items-center gap-2 mb-4" style={{ color: 'rgba(255,201,60,0.4)' }}>
             <ArrowLeft className="w-4 h-4" /> <span className="text-sm">Back</span>
           </button>
-          <h1 className="font-cinzel text-xl text-gold tracking-wider mb-1">GAME SETUP</h1>
-          <div className="h-px w-16" style={{ background: 'linear-gradient(90deg, rgba(212,168,67,0.4), transparent)' }} />
+          <h1 className="u-display text-xl text-gold tracking-wider mb-1">GAME SETUP</h1>
+          <div className="h-px w-16" style={{ background: 'linear-gradient(90deg, rgba(255,201,60,0.4), transparent)' }} />
         </div>
 
         <div className="space-y-5">
           {/* Player Count */}
           <div className="royal-glass rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4" style={{ color: '#d4a843' }} />
-              <h3 className="font-cinzel text-sm text-white tracking-wide">Players</h3>
+              <Users className="w-4 h-4" style={{ color: '#FFC93C' }} />
+              <h3 className="u-display text-sm text-white tracking-wide">Players</h3>
             </div>
             <div className="grid grid-cols-4 gap-2">
               {([4, 6, 8, 10] as const).map(c => (
                 <button key={c} onClick={() => handlePlayerCountChange(c)}
                   className="py-3 rounded-lg font-rajdhani text-lg transition-all"
                   style={{
-                    background: playerCount === c ? 'rgba(212,168,67,0.12)' : 'rgba(255,255,255,0.02)',
-                    border: `1px solid ${playerCount === c ? 'rgba(212,168,67,0.4)' : 'rgba(255,255,255,0.05)'}`,
-                    color: playerCount === c ? '#d4a843' : 'rgba(255,255,255,0.3)',
+                    background: playerCount === c ? 'rgba(255,201,60,0.12)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${playerCount === c ? 'rgba(255,201,60,0.4)' : 'rgba(255,255,255,0.05)'}`,
+                    color: playerCount === c ? '#FFC93C' : 'rgba(255,255,255,0.3)',
                   }}>{c}</button>
               ))}
             </div>
@@ -111,12 +111,12 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
           {/* Players */}
           <div className="royal-glass rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3">
-              <Bot className="w-4 h-4" style={{ color: '#d4a843' }} />
-              <h3 className="font-cinzel text-sm text-white tracking-wide">Seats</h3>
+              <Bot className="w-4 h-4" style={{ color: '#FFC93C' }} />
+              <h3 className="u-display text-sm text-white tracking-wide">Seats</h3>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {players.map((player, i) => (
-                <div key={i} className="rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(212,168,67,0.08)' }}>
+                <div key={i} className="rounded-lg p-3" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,201,60,0.08)' }}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{AVATARS[i]}</span>
@@ -134,8 +134,8 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
                         <button onClick={() => setPlayerType(i, true)}
                           className="px-2.5 py-0.5 text-[9px] font-bold tracking-wider transition-all"
                           style={{
-                            background: player.isAI ? 'rgba(212,168,67,0.15)' : 'transparent',
-                            color: player.isAI ? '#d4a843' : 'rgba(255,255,255,0.25)',
+                            background: player.isAI ? 'rgba(255,201,60,0.15)' : 'transparent',
+                            color: player.isAI ? '#FFC93C' : 'rgba(255,255,255,0.25)',
                           }}>AI</button>
                       </div>
                     )}
@@ -148,7 +148,7 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
                       onChange={e => setMyName(e.target.value)}
                       maxLength={20}
                       className="w-full px-2 py-1.5 rounded text-xs text-white placeholder:opacity-30 focus:outline-none mb-1.5"
-                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,168,67,0.12)' }}
+                      style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,201,60,0.12)' }}
                     />
                   )}
                   {player.isAI && (
@@ -172,18 +172,18 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
           {/* Trump */}
           <div className="royal-glass rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3">
-              <Settings className="w-4 h-4" style={{ color: '#d4a843' }} />
-              <h3 className="font-cinzel text-sm text-white tracking-wide">Trump Method (Hukum)</h3>
+              <Settings className="w-4 h-4" style={{ color: '#FFC93C' }} />
+              <h3 className="u-display text-sm text-white tracking-wide">Trump Method (Hukum)</h3>
             </div>
             <div className="grid grid-cols-2 gap-2">
               {trumpOptions.map(o => (
                 <button key={o.value} onClick={() => { Sounds.click(); setTrumpMethod(o.value); }}
                   className="text-left p-3 rounded-lg transition-all"
                   style={{
-                    background: trumpMethod === o.value ? 'rgba(212,168,67,0.08)' : 'rgba(255,255,255,0.01)',
-                    border: `1px solid ${trumpMethod === o.value ? 'rgba(212,168,67,0.3)' : 'rgba(255,255,255,0.04)'}`,
+                    background: trumpMethod === o.value ? 'rgba(255,201,60,0.08)' : 'rgba(255,255,255,0.01)',
+                    border: `1px solid ${trumpMethod === o.value ? 'rgba(255,201,60,0.3)' : 'rgba(255,255,255,0.04)'}`,
                   }}>
-                  <div className="text-sm" style={{ color: trumpMethod === o.value ? '#d4a843' : 'rgba(255,255,255,0.5)' }}>{o.label}</div>
+                  <div className="text-sm" style={{ color: trumpMethod === o.value ? '#FFC93C' : 'rgba(255,255,255,0.5)' }}>{o.label}</div>
                   <div className="text-[9px]" style={{ color: 'rgba(255,255,255,0.2)' }}>{o.desc}</div>
                 </button>
               ))}
@@ -193,17 +193,17 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
           {/* Points */}
           <div className="royal-glass rounded-xl p-5">
             <div className="flex items-center gap-2 mb-3">
-              <Target className="w-4 h-4" style={{ color: '#d4a843' }} />
-              <h3 className="font-cinzel text-sm text-white tracking-wide">Points to Win</h3>
+              <Target className="w-4 h-4" style={{ color: '#FFC93C' }} />
+              <h3 className="u-display text-sm text-white tracking-wide">Points to Win</h3>
             </div>
             <div className="grid grid-cols-4 gap-2">
               {([3, 5, 7, 10] as const).map(pts => (
                 <button key={pts} onClick={() => { Sounds.click(); setGamePointsTarget(pts); }}
                   className="py-3 rounded-lg font-rajdhani text-lg transition-all"
                   style={{
-                    background: gamePointsTarget === pts ? 'rgba(212,168,67,0.12)' : 'rgba(255,255,255,0.02)',
-                    border: `1px solid ${gamePointsTarget === pts ? 'rgba(212,168,67,0.4)' : 'rgba(255,255,255,0.05)'}`,
-                    color: gamePointsTarget === pts ? '#d4a843' : 'rgba(255,255,255,0.3)',
+                    background: gamePointsTarget === pts ? 'rgba(255,201,60,0.12)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${gamePointsTarget === pts ? 'rgba(255,201,60,0.4)' : 'rgba(255,255,255,0.05)'}`,
+                    color: gamePointsTarget === pts ? '#FFC93C' : 'rgba(255,255,255,0.3)',
                   }}>{pts}</button>
               ))}
             </div>
@@ -218,10 +218,10 @@ export function SetupScreen({ onBack, onStart }: SetupScreenProps) {
             onStart({ playerCount, trumpMethod, gamePointsTarget, playerNames: finalPlayers.map(p => p.name), players: finalPlayers });
           }}
             className="w-full rounded-xl p-[1px] transition-all duration-300 hover:scale-[1.02]"
-            style={{ background: 'linear-gradient(135deg, rgba(212,168,67,0.6), rgba(180,120,40,0.3))' }}>
-            <div className="rounded-xl py-4 flex items-center justify-center gap-3" style={{ background: '#2a0f0f' }}>
-              <Zap className="w-5 h-5" style={{ color: '#d4a843' }} />
-              <span className="font-cinzel text-lg tracking-wider text-white">{isSoloAI ? 'START GAME' : 'CONTINUE'}</span>
+            style={{ background: 'linear-gradient(135deg, rgba(255,201,60,0.6), rgba(180,120,40,0.3))' }}>
+            <div className="rounded-xl py-4 flex items-center justify-center gap-3" style={{ background: '#40287F' }}>
+              <Zap className="w-5 h-5" style={{ color: '#FFC93C' }} />
+              <span className="u-display text-lg tracking-wider text-white">{isSoloAI ? 'START GAME' : 'CONTINUE'}</span>
             </div>
           </button>
         </div>

@@ -10,9 +10,17 @@ import { LoadingScreen } from './components/LoadingScreen';
 import { TeamShuffleAnimation } from './components/TeamShuffleAnimation';
 import { GameState, Card, Player, Suit, Rank, CompletedTrick } from './types';
 import { AIPlayer } from './utils/aiPlayer';
+import { initJuice } from './utils/juice';
+import { Sounds } from './utils/sounds';
+import { Music } from './utils/music';
 import { connectSocket, disconnectSocket, getSocket } from './utils/socket';
 import { loadData, saveData } from './utils/storage';
 import { buildTourScenario, TourScenario } from './utils/tourScript';
+import { TRICK_COLLECT_MS } from './components/table/TrickPile';
+
+/** How long the board holds after a trick resolves. Just past the collect
+ *  animation, so the cards land and the next lead begins immediately. */
+const TRICK_PAUSE_MS = TRICK_COLLECT_MS + 90;
 
 type Screen = 'home' | 'setup' | 'join' | 'lobby' | 'loading' | 'team_reveal' | 'game' | 'round_result' | 'game_over';
 
@@ -318,6 +326,61 @@ export default function App() {
   const [tourStepIndex, setTourStepIndex] = useState(0);
   const tourAiTimeoutRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
+  // ── Juice layer: device tier probe + audio unlock ─────────────
+  //
+  // The tier probe starts immediately and keeps running, because a long
+  // session on a mid-range Android throttles and a tier picked once at load
+  // is wrong by the third round. Audio can only be unlocked from a real
+  // gesture, so we wait for the first tap anywhere.
+  useEffect(() => {
+    initJuice();
+    const unlock = () => Sounds.unlock();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    window.addEventListener('keydown', unlock, { once: true });
+
+    // Every chunky button gets hover and press feedback from one place, so a
+    // new screen can't ship silent controls by forgetting to wire them up.
+    const isBtn = (n: EventTarget | null) =>
+      n instanceof Element ? (n.closest('.u-btn') as HTMLElement | null) : null;
+
+    const onOver = (e: PointerEvent) => {
+      const btn = isBtn(e.target);
+      if (!btn || btn.hasAttribute('disabled')) return;
+      // Ignore movement between a button's own children.
+      if (btn.contains(e.relatedTarget as Node)) return;
+      Sounds.hover();
+    };
+    const onDown = (e: PointerEvent) => {
+      const btn = isBtn(e.target);
+      if (btn && !btn.hasAttribute('disabled')) Sounds.press();
+    };
+
+    document.addEventListener('pointerover', onOver);
+    document.addEventListener('pointerdown', onDown);
+    const unbindVis = Music.bindVisibility();
+
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+      document.removeEventListener('pointerover', onOver);
+      document.removeEventListener('pointerdown', onDown);
+      unbindVis();
+      Music.stop();
+    };
+  }, []);
+
+  // ── Soundtrack follows the screen ─────────────────────────────
+  //
+  // Two beds: a bright one for everything outside a hand, and a cooler, sparser
+  // one for the table itself, which has to sit under fifteen tricks without
+  // becoming something you want to switch off. Browsers won't start audio until
+  // a real gesture, so this only takes effect once the player has tapped
+  // something — which the menu guarantees before any table is reached.
+  useEffect(() => {
+    const atTable = screen === 'game';
+    Music.play(atTable ? 'game' : 'menu');
+  }, [screen]);
+
   // ── Startup: first-run tour, and shared ?room= links ──────────
   //
   // Two things handled here:
@@ -453,7 +516,7 @@ export default function App() {
             mindisWon: lastTrick.mindisInTrick
           });
         }
-        trickPauseRef.current = setTimeout(() => { trickPauseRef.current = null; setTrickPause(null); }, 2000);
+        trickPauseRef.current = setTimeout(() => { trickPauseRef.current = null; setTrickPause(null); }, TRICK_PAUSE_MS);
       }
     };
 
@@ -663,12 +726,17 @@ export default function App() {
           };
         }
 
-        // Trick complete but round continues
-        // Set a pause to show the winning card
+        // Trick complete but round continues.
+        // The pause exists to let the collect animation play out — it is not a
+        // "read the result" beat, because the cards flying to the winner are
+        // themselves the result. It used to be 2000ms against an ~1100ms
+        // animation, so every trick ended with ~900ms of dead air in which
+        // nothing moved and nothing was tappable. Fifteen tricks a round made
+        // that roughly thirteen seconds of freeze.
         trickPauseRef.current = setTimeout(() => {
           trickPauseRef.current = null;
           setTrickPause(null);
-        }, 2000);
+        }, TRICK_PAUSE_MS);
         setTrickPause({
           cards: newTrickCards,
           winnerSeatIndex: winningSeat,

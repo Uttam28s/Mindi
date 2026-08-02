@@ -1,0 +1,302 @@
+/* ═══════════════════════════════════════════════════════════════════
+   UTSAV — design tokens + juice layer
+   ───────────────────────────────────────────────────────────────────
+   Colours are named after what they are, not what they do. That's the
+   Fall Guys method: their internal palette names came from food
+   photography ("mint choc chip", "banana smoothie"), and naming is what
+   stops a palette drifting back into primary/secondary/muted mush.
+
+   Everything here is prefixed `u-` so it can live alongside the old
+   theme while screens are migrated one at a time.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── The ground: a candy gradient, deep enough that white cards pop ── */
+  --u-grape-deep : #34246E;
+  --u-grape      : #5B37B0;
+  --u-orchid     : #9B48CE;
+  --u-bubblegum  : #DE4FA2;
+  --u-rose       : #FF7FA8;
+
+  /* ── Action colours. Each has one job. ── */
+  --u-holi       : #FF4D8D;   /* primary action */
+  --u-marigold   : #FFC93C;   /* highlight, score, trump */
+  --u-sky        : #25C9F5;   /* team A */
+  --u-mint       : #38E08A;   /* confirm, success */
+  --u-jamun      : #7B5CFF;   /* secondary action */
+  --u-chilli     : #FF5C5C;   /* team B, danger */
+
+  /* ── Shadow colours. NEVER grey — always a darker sibling of the fill.
+        Neutral shadows are the single thing that makes chunky UI read as
+        a CSS demo rather than a moulded object. ── */
+  --u-holi-dark     : #C41F5E;
+  --u-marigold-dark : #C98A00;
+  --u-sky-dark      : #0B87AC;
+  --u-mint-dark     : #17A05C;
+  --u-jamun-dark    : #4B32C0;
+  --u-chilli-dark   : #C22E2E;
+
+  /* ── Ink & paper ── */
+  --u-ink        : #2B1A4A;
+  --u-ink-soft   : #5C4A82;
+  --u-paper      : #FFFFFF;
+  --u-paper-warm : #FFF9EC;
+
+  /* ── Radius scale. Radius is a first-class token here, not a constant —
+        it's the main dial for "chunky", so it has to be retunable. ── */
+  --u-r-pip   : 6px;
+  --u-r-card  : 14px;
+  --u-r-panel : 22px;
+  --u-r-pill  : 999px;
+
+  /* ── Motion vocabulary ── */
+  --u-pop        : cubic-bezier(.34, 1.56, .64, 1);   /* overshoot — the workhorse */
+  --u-pop-hard   : cubic-bezier(.68, -.55, .27, 1.55);/* overshoot both ends */
+  --u-anticipate : cubic-bezier(.36, 0, .66, -.56);   /* dips before it launches */
+  --u-snap       : cubic-bezier(.22, 1, .36, 1);      /* fast, no overshoot */
+
+  /* ── Depth. Solid offset shadows = physical plastic key. ── */
+  --u-lift-1 : 0 3px 0;
+  --u-lift-2 : 0 5px 0;
+  --u-lift-3 : 0 8px 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   TYPOGRAPHY
+   ═══════════════════════════════════════════════════════════════════ */
+
+.u-display {
+  font-family: 'Baloo 2', 'Baloo Bhai 2', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+.u-body {
+  font-family: 'Baloo 2', system-ui, sans-serif;
+  font-weight: 600;
+}
+
+/* Chunky outlined display text — canary face, plum shadow, no blur.
+   The hard offset (not a soft glow) is what reads as hand-painted signage. */
+.u-title {
+  font-family: 'Baloo 2', system-ui, sans-serif;
+  font-weight: 800;
+  color: var(--u-paper);
+  text-shadow:
+    0 2px 0 var(--u-grape-deep),
+    0 4px 0 rgba(52, 36, 110, .5),
+    0 7px 14px rgba(30, 16, 60, .35);
+  -webkit-text-stroke: 0.5px rgba(52, 36, 110, .25);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   CHUNKY BUTTON — a slab sitting on a darker slab. Pressing collapses
+   the gap, so the button physically travels rather than just tinting.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.u-btn {
+  position: relative;
+  border: 0;
+  cursor: pointer;
+  font-family: 'Baloo 2', system-ui, sans-serif;
+  font-weight: 800;
+  color: var(--u-paper);
+  background: var(--u-btn-bg, var(--u-holi));
+  border-radius: var(--u-r-pill);
+  padding: 14px 26px;
+  overflow: hidden;          /* clips the shine sweep to the button */
+  box-shadow:
+    var(--u-lift-2) var(--u-btn-shadow, var(--u-holi-dark)),
+    inset 0 2px 0 rgba(255, 255, 255, .32),
+    inset 0 -3px 0 rgba(0, 0, 0, .10);
+  transform: translateY(0) scale(1);
+  transition: transform 90ms var(--u-snap), box-shadow 90ms var(--u-snap), filter 140ms;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* Shine sweep on hover — the same treatment the Mindi tens get, so a live
+   control and a valuable card share one visual language: "this one matters". */
+.u-btn::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0; left: 0;
+  width: 42%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .55), transparent);
+  transform: translateX(-140%) skewX(-18deg);
+  pointer-events: none;
+  z-index: 2;
+}
+.u-btn:hover:not(:disabled)::before,
+.u-btn:focus-visible:not(:disabled)::before {
+  animation: u-shine-sweep .8s ease-in-out;
+}
+.u-btn::after {              /* the broad soft specular — one blob, top-biased */
+  content: '';
+  position: absolute;
+  inset: 4px 10px auto 10px;
+  height: 34%;
+  border-radius: var(--u-r-pill);
+  background: rgba(255, 255, 255, .34);
+  pointer-events: none;
+}
+.u-btn:hover  { filter: brightness(1.06); }
+.u-btn:active {
+  transform: translateY(5px) scale(.98);
+  box-shadow:
+    0 0 0 var(--u-btn-shadow, var(--u-holi-dark)),
+    inset 0 2px 0 rgba(255, 255, 255, .22),
+    inset 0 -2px 0 rgba(0, 0, 0, .12);
+}
+.u-btn:disabled { filter: grayscale(.65) brightness(.85); cursor: not-allowed; }
+
+/* colour variants */
+.u-btn--marigold { --u-btn-bg: var(--u-marigold); --u-btn-shadow: var(--u-marigold-dark); color: #4A3000; }
+.u-btn--sky      { --u-btn-bg: var(--u-sky);      --u-btn-shadow: var(--u-sky-dark); }
+.u-btn--mint     { --u-btn-bg: var(--u-mint);     --u-btn-shadow: var(--u-mint-dark); color: #04351D; }
+.u-btn--jamun    { --u-btn-bg: var(--u-jamun);    --u-btn-shadow: var(--u-jamun-dark); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PANEL — inflated soft plastic. Two inner shadows (light top-left,
+   dark bottom-right) plus one outer. That pairing is what reads as a
+   dome rather than a bevelled flat face.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.u-panel {
+  background: var(--u-panel-bg, rgba(255, 255, 255, .16));
+  border: 2px solid rgba(255, 255, 255, .34);
+  border-radius: var(--u-r-panel);
+  box-shadow:
+    0 6px 0 rgba(52, 36, 110, .22),
+    0 12px 28px rgba(30, 16, 60, .26),
+    inset 0 2px 0 rgba(255, 255, 255, .42),
+    inset 0 -6px 12px rgba(52, 36, 110, .12);
+}
+.u-panel--solid { --u-panel-bg: var(--u-paper); border-color: rgba(52, 36, 110, .10); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   KEYFRAMES
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* --- ambient: nothing on screen is ever completely still --- */
+@keyframes u-bob {
+  0%, 100% { transform: translateY(0) rotate(var(--u-bob-r, 0deg)); }
+  50%      { transform: translateY(var(--u-bob-y, -8px)) rotate(var(--u-bob-r2, 0deg)); }
+}
+@keyframes u-drift {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg); }
+  33%  { transform: translate3d(var(--u-dx, 22px), var(--u-dy, -18px), 0) rotate(6deg); }
+  66%  { transform: translate3d(calc(var(--u-dx, 22px) * -.6), calc(var(--u-dy, -18px) * .7), 0) rotate(-5deg); }
+  100% { transform: translate3d(0, 0, 0) rotate(0deg); }
+}
+@keyframes u-sway {
+  0%, 100% { transform: rotate(-2.2deg); }
+  50%      { transform: rotate(2.2deg); }
+}
+@keyframes u-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.045); }
+}
+
+/* --- entrances --- */
+@keyframes u-pop-in {
+  0%   { opacity: 0; transform: scale(.6) translateY(14px); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes u-drop-in {
+  0%   { opacity: 0; transform: translateY(-38px) scale(.9); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* --- attention --- */
+@keyframes u-ring-burst {
+  0%   { transform: translate(-50%, -50%) scale(.35); opacity: .95; }
+  100% { transform: translate(-50%, -50%) scale(3.4);  opacity: 0; }
+}
+@keyframes u-turn-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 201, 60, .78), 0 4px 0 var(--u-marigold-dark); }
+  50%      { box-shadow: 0 0 0 9px rgba(255, 201, 60, 0), 0 4px 0 var(--u-marigold-dark); }
+}
+@keyframes u-turn-ping {
+  0%   { transform: scale(1);    opacity: .85; }
+  70%  { transform: scale(1.55); opacity: 0; }
+  100% { transform: scale(1.55); opacity: 0; }
+}
+@keyframes u-nudge {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-7px) rotate(-2deg); }
+  40%      { transform: translateX(6px)  rotate(2deg); }
+  60%      { transform: translateX(-4px) rotate(-1deg); }
+  80%      { transform: translateX(3px)  rotate(1deg); }
+}
+@keyframes u-shine-sweep {
+  0%   { transform: translateX(-130%) skewX(-18deg); }
+  100% { transform: translateX(260%)  skewX(-18deg); }
+}
+
+/* --- impact --- */
+@keyframes u-shake-sm { 0%,100%{transform:translate(0,0)} 25%{transform:translate(-2px,1px)} 50%{transform:translate(2px,-1px)} 75%{transform:translate(-1px,-1px)} }
+@keyframes u-shake-md { 0%,100%{transform:translate(0,0)} 20%{transform:translate(-4px,2px)} 40%{transform:translate(4px,-2px)} 60%{transform:translate(-3px,-2px)} 80%{transform:translate(3px,2px)} }
+@keyframes u-shake-lg {
+  0%,100%{transform:translate(0,0) rotate(0)} 15%{transform:translate(-8px,3px) rotate(-.6deg)}
+  30%{transform:translate(7px,-4px) rotate(.6deg)} 45%{transform:translate(-6px,-3px) rotate(-.4deg)}
+  60%{transform:translate(5px,4px) rotate(.4deg)} 80%{transform:translate(-3px,2px) rotate(-.2deg)}
+}
+@keyframes u-flash { 0% { opacity: .34; } 100% { opacity: 0; } }
+
+/* --- background --- */
+@keyframes u-confetti-fall {
+  0%   { transform: translateY(-8vh) rotate(0deg);   opacity: 0; }
+  8%   { opacity: .85; }
+  92%  { opacity: .85; }
+  100% { transform: translateY(108vh) rotate(680deg); opacity: 0; }
+}
+
+.u-anim-pop-in    { animation: u-pop-in .42s var(--u-pop) both; }
+.u-anim-drop-in   { animation: u-drop-in .38s var(--u-pop) both; }
+.u-anim-breathe   { animation: u-breathe 3.2s ease-in-out infinite; }
+.u-anim-nudge     { animation: u-nudge .42s ease-out; }
+.u-anim-turn      { animation: u-turn-pulse 1.5s ease-out infinite; }
+.u-shake-sm       { animation: u-shake-sm .2s ease-out; }
+.u-shake-md       { animation: u-shake-md .3s ease-out; }
+.u-shake-lg       { animation: u-shake-lg .5s ease-out; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   HIT-STOP — freeze the world for a beat on impact. Transitions are
+   left alone deliberately: pausing those too makes the freeze read as
+   a dropped frame rather than a punch.
+   ═══════════════════════════════════════════════════════════════════ */
+
+.u-frozen *,
+.u-frozen *::before,
+.u-frozen *::after { animation-play-state: paused !important; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   PERFORMANCE TIERS
+   Set `data-tier` on <html> from the runtime probe. Low tier keeps the
+   game identical in structure and just drops channels.
+   ═══════════════════════════════════════════════════════════════════ */
+
+[data-tier="low"] .u-tier-high,
+[data-tier="medium"] .u-tier-high { display: none !important; }
+[data-tier="low"] .u-tier-med     { display: none !important; }
+[data-tier="low"] .u-panel        { box-shadow: 0 4px 0 rgba(52,36,110,.22); }
+
+/* ═══════════════════════════════════════════════════════════════════
+   REDUCED MOTION — reduce and replace, don't kill. State changes must
+   still be visible; they just stop travelling across the screen.
+   ═══════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  .u-ambient,
+  .u-anim-breathe,
+  .u-anim-turn { animation: none !important; }
+
+  .u-shake-sm, .u-shake-md, .u-shake-lg { animation: none !important; }
+
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .08ms !important;
+  }
+}

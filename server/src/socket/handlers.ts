@@ -6,10 +6,18 @@ import {
 import { playCard as enginePlayCard, applyBandHukum, revealBandHukum } from '../engine/gameEngine';
 import { GameState, Player, Card } from '../types';
 
-/** Strip private hands — send only a player's own cards. */
-function publicState(state: GameState): Omit<GameState, 'players'> & { players: Omit<Player, 'hand'>[] } {
+/**
+ * Strip private hands AND the concealed band hukum card (types.ts marks
+ * round.trumpCard "server only"). Keep in sync with worker/src/room.ts.
+ */
+function publicState(state: GameState): Omit<GameState, 'players' | 'round'> & {
+  players: Omit<Player, 'hand'>[];
+  round: Omit<GameState['round'], 'trumpCard'>;
+} {
+  const { trumpCard: _trumpCard, ...round } = state.round;
   return {
     ...state,
+    round,
     players: state.players.map(({ hand: _hand, ...rest }) => rest)
   };
 }
@@ -111,8 +119,24 @@ export function registerHandlers(io: Server, socket: Socket): void {
   socket.on('request_trump_reveal', ({ roomCode }) => {
     const room = getRoom(roomCode);
     if (!room?.gameState) return;
+    const state = room.gameState;
 
-    const newState = revealBandHukum(room.gameState);
+    // Authorization — must hold a seat, be in Band Hukum B, and be on turn.
+    // Without these any socket could force the hidden trump to be revealed.
+    const seatIndex = state.players.findIndex(p => p.id === socket.id);
+    if (seatIndex === -1) { socket.emit('error', { code: 'NOT_IN_GAME', message: 'Not in game' }); return; }
+    if (state.config.trumpMethod !== 'band_hukum_b') {
+      socket.emit('error', { code: 'NOT_ALLOWED', message: 'Trump cannot be revealed on demand in this mode' });
+      return;
+    }
+    if (state.round.currentTurnSeatIndex !== seatIndex) {
+      socket.emit('error', { code: 'NOT_YOUR_TURN', message: 'Not your turn' });
+      return;
+    }
+
+    const { newState, error } = revealBandHukum(state);
+    if (error) { socket.emit('error', { code: 'INVALID_MOVE', message: error }); return; }
+
     room.gameState = newState;
     io.to(roomCode).emit('trump_revealed', {
       trumpSuit: newState.round.trumpSuit,

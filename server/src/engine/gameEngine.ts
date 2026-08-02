@@ -91,36 +91,78 @@ export function initGame(
 
 // ── Band Hukum selection ────────────────────────────────────────────
 
-/** Player nominates their hidden trump card (band hukum). PRD §8.2 */
+/**
+ * Player nominates their hidden trump card (band hukum). PRD §8.2
+ *
+ * SECURITY: every guard below is load-bearing. Without them any seated player
+ * could call this at any point in any trump mode and overwrite the trump with a
+ * card from their own hand — then force a reveal to convert the whole round to
+ * their strongest suit.
+ */
 export function applyBandHukum(
   state: GameState,
   seatIndex: number,
   cardId: string
 ): { newState: GameState; error?: string } {
+  const { round, config } = state;
+
+  // 1. Only the two band hukum modes nominate a hidden trump at all.
+  if (config.trumpMethod !== 'band_hukum_a' && config.trumpMethod !== 'band_hukum_b') {
+    return { newState: state, error: 'Trump is not chosen by a player in this mode' };
+  }
+
+  // 2. Only during trump selection, before play begins.
+  if (state.phase !== 'trump_selection') {
+    return { newState: state, error: 'Trump selection is closed' };
+  }
+
+  // 3. Exactly once — no overwriting an existing nomination.
+  if (round.trumpCard || round.trumpRevealed) {
+    return { newState: state, error: 'Trump has already been chosen' };
+  }
+
+  // 4. Only the dealer nominates.
+  if (round.dealerSeatIndex !== seatIndex) {
+    return { newState: state, error: 'Only the dealer chooses the trump' };
+  }
+
   const player = state.players[seatIndex];
+  if (!player) return { newState: state, error: 'No such seat' };
+
   const card = player.hand.find(c => c.id === cardId);
   if (!card) return { newState: state, error: 'Card not in hand' };
 
   return {
     newState: {
       ...state,
-      round: { ...state.round, trumpCard: card, trumpRevealed: false },
+      round: { ...round, trumpCard: card, trumpRevealed: false },
       phase: 'playing'
     }
   };
 }
 
-/** Reveal band hukum trump. PRD §8.2 */
-export function revealBandHukum(state: GameState): GameState {
-  const { trumpCard } = state.round;
-  if (!trumpCard) return state;
+/**
+ * Reveal band hukum trump. PRD §8.2
+ *
+ * Returns an error rather than silently no-op'ing so callers cannot be tricked
+ * into broadcasting a "revealed" event for a round with no hidden trump.
+ * Caller is responsible for checking WHO may reveal (see room.ts).
+ */
+export function revealBandHukum(
+  state: GameState
+): { newState: GameState; error?: string } {
+  const { trumpCard, trumpRevealed } = state.round;
+  if (trumpRevealed) return { newState: state, error: 'Trump is already revealed' };
+  if (!trumpCard) return { newState: state, error: 'No hidden trump to reveal' };
   return {
-    ...state,
-    round: {
-      ...state.round,
-      trumpSuit: trumpCard.suit,
-      trumpRevealed: true,
-      trumpCard: null
+    newState: {
+      ...state,
+      round: {
+        ...state.round,
+        trumpSuit: trumpCard.suit,
+        trumpRevealed: true,
+        trumpCard: null
+      }
     }
   };
 }

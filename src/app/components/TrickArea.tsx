@@ -4,8 +4,8 @@ import { Card } from './Card';
 const AVATARS = ['🦁', '🦅', '🐘', '🦚', '🐅', '🐍', '🦎', '🐎', '🐒', '🦜'];
 
 const TEAM_COLORS = [
-  { bg: 'rgba(96,165,250,0.15)', border: 'rgba(96,165,250,0.4)', glow: 'rgba(96,165,250,0.15)' },
-  { bg: 'rgba(248,113,113,0.15)', border: 'rgba(248,113,113,0.4)', glow: 'rgba(248,113,113,0.15)' },
+  { bg: 'rgba(37,201,245,0.15)', border: 'rgba(37,201,245,0.4)', glow: 'rgba(37,201,245,0.15)' },
+  { bg: 'rgba(255,107,138,0.15)', border: 'rgba(255,107,138,0.4)', glow: 'rgba(255,107,138,0.15)' },
 ];
 
 interface TrickAreaProps {
@@ -45,20 +45,20 @@ export function TrickArea({ currentTrick, playerCount, currentTurnIndex, playerN
       <div className="absolute rounded-full" style={{
         width: ringSize, height: ringSize,
         left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-        border: '1px solid rgba(212,168,67,0.06)',
-        background: 'radial-gradient(circle, rgba(212,168,67,0.02) 0%, transparent 70%)',
+        border: '1px solid rgba(255,201,60,0.06)',
+        background: 'radial-gradient(circle, rgba(255,201,60,0.02) 0%, transparent 70%)',
       }} />
 
       {/* Inner felt */}
       <div className="absolute rounded-full flex items-center justify-center" style={{
         width: feltSize, height: feltSize,
         left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-        background: 'radial-gradient(circle at 40% 35%, rgba(212,168,67,0.04), rgba(30,8,8,0.4))',
-        border: '1px solid rgba(212,168,67,0.08)',
+        background: 'radial-gradient(circle at 40% 35%, rgba(255,201,60,0.04), rgba(30,8,8,0.4))',
+        border: '1px solid rgba(255,201,60,0.08)',
         boxShadow: 'inset 0 2px 20px rgba(0,0,0,0.3)',
       }}>
         {currentTrick.cards.length === 0 && (
-          <span style={{ fontSize: Math.max(10, Math.round(11 * r)), letterSpacing: '0.1em', color: 'rgba(212,168,67,0.2)' }}>PLAY</span>
+          <span style={{ fontSize: Math.max(10, Math.round(11 * r)), letterSpacing: '0.1em', color: 'rgba(255,201,60,0.2)' }}>PLAY</span>
         )}
       </div>
 
@@ -67,11 +67,11 @@ export function TrickArea({ currentTrick, playerCount, currentTurnIndex, playerN
         const pos = getPos(entry.seatIndex, radius);
         const isLatest = i === currentTrick.cards.length - 1;
         return (
-          <div key={`${entry.seatIndex}-${entry.card.id}`}
+          <div key={`${entry.seatIndex}-${entry.card.id}`} data-played-seat={entry.seatIndex}
             className="absolute transition-all duration-300 ease-out"
             style={{ left: '50%', top: '50%', transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`, zIndex: 10 + i }}>
-            <div style={{ filter: isLatest ? 'drop-shadow(0 0 8px rgba(212,168,67,0.3))' : undefined }}>
-              <Card card={entry.card} faceUp={true} size="md" />
+            <div style={{ filter: isLatest ? 'drop-shadow(0 0 8px rgba(255,201,60,0.3))' : undefined }}>
+              <Card card={entry.card} faceUp={true} inert size="md" />
             </div>
           </div>
         );
@@ -85,7 +85,7 @@ export function TrickArea({ currentTrick, playerCount, currentTurnIndex, playerN
         const team = playerTeams?.[i];
         const tc = team !== undefined ? TEAM_COLORS[team] : null;
         return (
-          <div key={`seat-${i}`} className="absolute" style={{
+          <div key={`seat-${i}`} data-seat={i} className="absolute" style={{
             left: '50%', top: '50%',
             transform: `translate(calc(-50% + ${pos.x}px), calc(-50% + ${pos.y}px))`, zIndex: 5,
           }}>
@@ -103,9 +103,9 @@ export function TrickArea({ currentTrick, playerCount, currentTurnIndex, playerN
                     width: avatarPx,
                     height: avatarPx,
                     fontSize: avatarEmoji,
-                    background: isCurrent ? 'rgba(212,168,67,0.2)' : tc ? tc.bg : 'rgba(255,255,255,0.03)',
-                    border: `2px solid ${isCurrent ? 'rgba(212,168,67,0.8)' : tc ? tc.border : 'rgba(255,255,255,0.06)'}`,
-                    boxShadow: isCurrent ? '0 0 12px rgba(212,168,67,0.35)' : 'none',
+                    background: isCurrent ? 'rgba(255,201,60,0.2)' : tc ? tc.bg : 'rgba(255,255,255,0.03)',
+                    border: `2px solid ${isCurrent ? 'rgba(255,201,60,0.8)' : tc ? tc.border : 'rgba(255,255,255,0.06)'}`,
+                    boxShadow: isCurrent ? '0 0 12px rgba(255,201,60,0.35)' : 'none',
                   }}>
                   {AVATARS[i]}
                 </div>
@@ -120,8 +120,8 @@ export function TrickArea({ currentTrick, playerCount, currentTurnIndex, playerN
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  color: isCurrent ? '#d4a843' : hasPlayed ? 'rgba(34,197,94,0.7)' : 'rgba(255,255,255,0.45)',
-                  textShadow: isCurrent ? '0 0 8px rgba(212,168,67,0.6)' : 'none',
+                  color: isCurrent ? '#FFC93C' : hasPlayed ? 'rgba(34,197,94,0.7)' : 'rgba(255,255,255,0.45)',
+                  textShadow: isCurrent ? '0 0 8px rgba(255,201,60,0.6)' : 'none',
                 }}>
                 {playerNames?.[i]?.slice(0, 8) || `P${i + 1}`}
               </span>
